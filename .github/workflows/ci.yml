@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod   # one source of truth for the Go version
+          cache: true
+
+      - name: Formatting
+        run: |
+          gofmt -l . | tee /tmp/fmt
+          test ! -s /tmp/fmt || { echo "::error::run make fmt"; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.56.2   # keep in step with GOLANGCI_VERSION in the Makefile
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./...
