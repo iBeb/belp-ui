@@ -1,0 +1,58 @@
+# ── Go ───────────────────────────────────────────────────────────────────────
+# Compiled binaries: no extension on Unix, so also ignore the module name.
+/belp-ui
+/bin/
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+coverage.*
+/vendor/
+go.work
+go.work.sum
+
+# ── Editors and IDEs ─────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.code-workspace
+.fleet/
+*.swp
+*.swo
+*~
+.\#*
+\#*\#
+tags
+.tags
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon?
+
+# ── Linux / Windows, for anyone else ─────────────────────────────────────────
+*~
+.directory
+Thumbs.db
+Desktop.ini
+
+# ── Local environment ────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+.direnv/
+.envrc.local
+
+# ── Claude Code per-machine state (shared config stays tracked) ──────────────
+.claude/settings.local.json
