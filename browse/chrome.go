@@ -36,11 +36,21 @@ type Option struct {
 
 // Group is a set of chips that belong together — the kinds of activity, the
 // states, the date range.
+//
+// A group with nothing selected is a group that constrains nothing. That is the
+// only sensible reading: the alternative is that clearing a filter hides
+// everything, so the empty bar would show an empty list.
 type Group struct {
 	// Label is drawn before the chips, dimmed. Empty for a group that speaks
 	// for itself.
 	Label   string
 	Options []Option
+
+	// Exclusive groups hold one answer at a time — a date range is one window,
+	// not several. Selecting a chip in one clears its siblings, and selecting
+	// the chip that is already on leaves it on: there is no useful state where
+	// an exclusive group has no answer.
+	Exclusive bool
 }
 
 // Key is one footer hint.

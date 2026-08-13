@@ -27,6 +27,14 @@ type PreviewFunc func(i, width, height int) []string
 // with it — open it, resume it, whatever the app is for.
 type ActivateMsg struct{ Index int }
 
+// FiltersChangedMsg says a chip was toggled, so whatever the app derives from
+// the filters is now stale.
+//
+// The app reads the new state from Selected; this only says when to look. Sending
+// the state itself would mean deciding here what a selection means, and a chip
+// labelled "30 days" means something only the app knows.
+type FiltersChangedMsg struct{}
+
 // QuitMsg is Esc or ^C.
 //
 // A message rather than tea.Quit: whether those keys end the program is the
@@ -159,9 +167,16 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.moveChip(1)
 		}
 
-	case "enter":
+	case "enter", " ":
 		switch m.chrome.Focus {
+		case FocusFilters:
+			m.toggleChip()
+			return m, func() tea.Msg { return FiltersChangedMsg{} }
 		case FocusSearch:
+			if msg.String() == " " {
+				m.chrome.Query += " "
+				break
+			}
 			// Down into the list, which is what Enter means in a search field.
 			m.chrome.Focus = FocusList
 		case FocusList:
@@ -233,6 +248,67 @@ func (m *Model) moveChip(delta int) {
 	}
 	at = clamp(at+delta, 0, len(flat)-1)
 	m.group, m.option = flat[at].group, flat[at].option
+}
+
+// toggleChip flips the chip under the cursor.
+//
+// Copy on write, never in place: a Model is passed around by value, so several
+// copies share one Groups backing array and mutating it would change the filters
+// on every copy — including the one the caller still holds.
+func (m *Model) toggleChip() {
+	if m.group >= len(m.chrome.Groups) {
+		return
+	}
+	groups := make([]Group, len(m.chrome.Groups))
+	copy(groups, m.chrome.Groups)
+
+	g := groups[m.group]
+	if m.option >= len(g.Options) {
+		return
+	}
+	options := make([]Option, len(g.Options))
+	copy(options, g.Options)
+
+	if g.Exclusive {
+		for i := range options {
+			options[i].Selected = i == m.option
+		}
+	} else {
+		options[m.option].Selected = !options[m.option].Selected
+	}
+
+	g.Options = options
+	groups[m.group] = g
+	m.chrome.Groups = groups
+}
+
+// Groups is the filter state, for the app to read after a FiltersChangedMsg.
+//
+// Deep: copying the groups alone leaves every Options slice pointing at the
+// model's own, so writing to what looked like a copy would change the filters.
+func (m Model) Groups() []Group {
+	out := make([]Group, len(m.chrome.Groups))
+	for i, g := range m.chrome.Groups {
+		out[i] = g
+		out[i].Options = make([]Option, len(g.Options))
+		copy(out[i].Options, g.Options)
+	}
+	return out
+}
+
+// SelectedIn is the labels selected in one group, in the order they are drawn.
+// Empty means the group constrains nothing.
+func (m Model) SelectedIn(group int) []string {
+	if group < 0 || group >= len(m.chrome.Groups) {
+		return nil
+	}
+	var out []string
+	for _, o := range m.chrome.Groups[group].Options {
+		if o.Selected {
+			out = append(out, o.Label)
+		}
+	}
+	return out
 }
 
 type chipAt struct{ group, option int }

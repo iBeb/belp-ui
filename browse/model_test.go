@@ -470,3 +470,90 @@ func TestModelWithNoRowFuncDrawsTheFrameAnyway(t *testing.T) {
 		t.Errorf("View() has %d line(s), want 24", len(lines))
 	}
 }
+
+func TestSpaceAndEnterToggleTheChipUnderTheCursor(t *testing.T) {
+	for _, k := range []string{" ", "enter"} {
+		m := model(10)
+		m.chrome.Focus = FocusFilters
+		m, _ = press(m, "right") // "reviewed", unselected in sample()
+
+		if got := m.SelectedIn(0); len(got) != 1 || got[0] != "opened" {
+			t.Fatalf("%s: SelectedIn(0) = %v, want [opened] to begin with", k, got)
+		}
+		m, cmd := press(m, k)
+		if cmd == nil {
+			t.Fatalf("%s produced no command", k)
+		}
+		if _, ok := cmd().(FiltersChangedMsg); !ok {
+			t.Errorf("%s gave %T, want FiltersChangedMsg", k, cmd())
+		}
+		if got := m.SelectedIn(0); len(got) != 2 || got[1] != "reviewed" {
+			t.Errorf("%s: SelectedIn(0) = %v, want opened and reviewed", k, got)
+		}
+		// And off again.
+		m, _ = press(m, k)
+		if got := m.SelectedIn(0); len(got) != 1 || got[0] != "opened" {
+			t.Errorf("%s: SelectedIn(0) = %v, want reviewed toggled back off", k, got)
+		}
+	}
+}
+
+// A date range is one window, not several.
+func TestExclusiveGroupHoldsOneAnswer(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{{Exclusive: true, Options: []Option{
+		{Label: "7 days"}, {Label: "30 days", Selected: true}, {Label: "all"},
+	}}}
+	m.chrome.Focus = FocusFilters
+
+	m, _ = press(m, "right", "right", " ") // onto "all"
+	if got := m.SelectedIn(0); len(got) != 1 || got[0] != "all" {
+		t.Errorf("SelectedIn(0) = %v, want only [all]", got)
+	}
+	// Choosing the one already chosen leaves it chosen: an exclusive group with
+	// no answer is not a state worth having.
+	m, _ = press(m, " ")
+	if got := m.SelectedIn(0); len(got) != 1 || got[0] != "all" {
+		t.Errorf("SelectedIn(0) = %v, want it still [all]", got)
+	}
+}
+
+// A Model is copied by value, so a toggle must not reach through a shared
+// backing array into a copy somebody else is still holding.
+func TestTogglingDoesNotMutateOtherCopies(t *testing.T) {
+	before := model(10)
+	before.chrome.Focus = FocusFilters
+	was := before.SelectedIn(0)
+
+	after, _ := press(before, " ") // toggle "opened" off
+
+	if got := before.SelectedIn(0); len(got) != len(was) {
+		t.Errorf("the earlier copy changed: SelectedIn(0) = %v, want %v", got, was)
+	}
+	if len(after.SelectedIn(0)) == len(was) {
+		t.Error("the toggle had no effect on the new copy")
+	}
+}
+
+// Space in the search field is a space, not a toggle.
+func TestSpaceTypesWhileSearching(t *testing.T) {
+	m := model(10)
+	m.chrome.Focus = FocusSearch
+	m.chrome.Query = "geo"
+	m, cmd := press(m, " ")
+	if m.Query() != "geo " {
+		t.Errorf("Query() = %q, want %q", m.Query(), "geo ")
+	}
+	if cmd != nil {
+		t.Errorf("cmd = %T, want none: nothing was filtered", cmd())
+	}
+}
+
+func TestGroupsIsACopy(t *testing.T) {
+	m := model(10)
+	got := m.Groups()
+	got[0].Options[0].Selected = !got[0].Options[0].Selected
+	if m.SelectedIn(0)[0] != "opened" {
+		t.Error("writing to the returned groups changed the model")
+	}
+}
