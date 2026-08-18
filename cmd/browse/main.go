@@ -66,7 +66,7 @@ func chrome(s theme.Styles) browse.Chrome {
 			{Name: "^R", Desc: "review"},
 			{Name: "^L", Desc: "reload"},
 			{Name: "^U", Desc: "clear"},
-			{Name: "␛", Desc: "quit"},
+			{Name: "^Q", Desc: "quit"},
 		},
 	}
 }

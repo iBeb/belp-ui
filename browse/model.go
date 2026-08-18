@@ -183,7 +183,13 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	rows := m.Layout().List.Height
 
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	// ^Q and ^C, never Esc. Esc is too useful inside an app — backing out of a
+	// field, cancelling an overlay — to spend on the one action you cannot undo,
+	// and it is one stray keypress away at all times.
+	//
+	// ^Q is XON, which a cooked terminal eats before an app sees it. Bubbletea
+	// puts the terminal in raw mode, which clears IXON, so it arrives.
+	case "ctrl+q", "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
 	// The bands are one selection model, not three: the search field is the row

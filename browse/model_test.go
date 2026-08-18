@@ -54,6 +54,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlW}
 	case "ctrl+c":
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case "ctrl+q":
+		return tea.KeyMsg{Type: tea.KeyCtrlQ}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -228,8 +230,8 @@ func TestEnterOnAnEmptyListDoesNothing(t *testing.T) {
 }
 
 // Quitting is the app's decision; the component only reports the key.
-func TestEscAndCtrlCAskToQuit(t *testing.T) {
-	for _, k := range []string{"esc", "ctrl+c"} {
+func TestCtrlQAndCtrlCAskToQuit(t *testing.T) {
+	for _, k := range []string{"ctrl+q", "ctrl+c"} {
 		_, cmd := press(model(10), k)
 		if cmd == nil {
 			t.Fatalf("%s produced no command", k)
@@ -700,5 +702,18 @@ func TestMouseReleaseAndMotionAreIgnored(t *testing.T) {
 		if m.Cursor() != 0 {
 			t.Errorf("%v moved the cursor to %d", msg.Action, m.Cursor())
 		}
+	}
+}
+
+// Esc must not quit. It is one stray keypress away at all times, and an app needs
+// it for backing out of things.
+func TestEscDoesNotQuit(t *testing.T) {
+	m := model(10)
+	m, cmd := press(m, "esc")
+	if cmd != nil {
+		t.Fatalf("esc produced %T, want nothing", cmd())
+	}
+	if m.Focus() != FocusList || m.Cursor() != 0 {
+		t.Errorf("esc changed the state: focus %v, cursor %d", m.Focus(), m.Cursor())
 	}
 }

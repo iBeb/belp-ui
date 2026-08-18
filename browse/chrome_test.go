@@ -29,7 +29,7 @@ func sample() Chrome {
 			{Options: []Option{{Label: "30 days", Selected: true}}},
 		},
 		Query:       "geo",
-		Keys:        []Key{{"↵", "open"}, {"^R", "review"}, {"␛", "quit"}},
+		Keys:        []Key{{"↵", "open"}, {"^R", "review"}, {"^Q", "quit"}},
 		Placeholder: "type to filter",
 	}
 }
