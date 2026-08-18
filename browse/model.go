@@ -117,8 +117,66 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		return m.key(msg)
+	case tea.MouseMsg:
+		return m.mouse(msg)
 	}
 	return m, nil
+}
+
+// wheelRows is how far one wheel notch moves the list. Three is the usual
+// terminal step; one is sluggish and a whole page loses your place.
+const wheelRows = 3
+
+// mouse handles the wheel and clicks.
+//
+// The app has to ask for mouse events for these to arrive at all — until it
+// does, the terminal keeps the wheel and scrolls its own scrollback instead of
+// the list. The cost is that the terminal's text selection stops working while
+// the app is up, unless you hold the key it reserves for that (Option on macOS).
+func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
+	l := m.Layout()
+
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.scroll(-wheelRows)
+		return m, nil
+	case tea.MouseButtonWheelDown:
+		m.scroll(wheelRows)
+		return m, nil
+	}
+
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		return m, nil // releases, motion and other buttons are not ours
+	}
+
+	// Clicking a band is the same as arrowing to it.
+	switch y := msg.Y; {
+	case !l.Filters.Empty() && y == l.Filters.Y:
+		m.chrome.Focus = FocusFilters
+	case !l.Search.Empty() && y == l.Search.Y:
+		m.chrome.Focus = FocusSearch
+	case y >= l.List.Y && y <= l.List.Bottom():
+		if i := m.top + (y - l.List.Y); i < m.count {
+			m.chrome.Focus = FocusList
+			m.cursor = i
+			m.clamp()
+		}
+	}
+	return m, nil
+}
+
+// scroll moves the viewport and takes the cursor along only as far as it must.
+//
+// The wheel moves the view, not the selection: tying it to the cursor makes the
+// list lurch, because the view then only moves once the highlight is pushed off
+// an edge — and does nothing at all at either end.
+func (m *Model) scroll(delta int) {
+	rows := m.Layout().List.Height
+	if m.count == 0 || rows <= 0 {
+		return
+	}
+	m.top = clamp(m.top+delta, 0, max(0, m.count-rows))
+	m.cursor = clamp(m.cursor, m.top, min(m.top+rows-1, m.count-1))
 }
 
 func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {

@@ -557,3 +557,148 @@ func TestGroupsIsACopy(t *testing.T) {
 		t.Error("writing to the returned groups changed the model")
 	}
 }
+
+func wheel(up bool) tea.MouseMsg {
+	b := tea.MouseButtonWheelDown
+	if up {
+		b = tea.MouseButtonWheelUp
+	}
+	return tea.MouseMsg{Button: b, Action: tea.MouseActionPress}
+}
+
+func click(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+}
+
+// The wheel moves the view, not the selection. Tied to the cursor it lurches: the
+// view only moves once the highlight is pushed off an edge.
+func TestWheelMovesTheViewportNotTheCursor(t *testing.T) {
+	m := model(100)
+	// Down the list far enough that a notch of scrolling leaves it on screen.
+	for i := 0; i < 10; i++ {
+		m, _ = press(m, "down")
+	}
+	at := m.Cursor()
+
+	m, _ = m.Update(wheel(false))
+	if m.top != wheelRows {
+		t.Errorf("top = %d, want %d after one notch", m.top, wheelRows)
+	}
+	if m.Cursor() != at {
+		t.Errorf("Cursor() = %d, want it left at %d: the wheel moves the view", m.Cursor(), at)
+	}
+
+	m, _ = m.Update(wheel(true))
+	if m.top != 0 {
+		t.Errorf("top = %d, want back to 0", m.top)
+	}
+	if m.Cursor() != at {
+		t.Errorf("Cursor() = %d, want it still at %d", m.Cursor(), at)
+	}
+}
+
+// Scrolled far enough that the cursor would be off screen, it is dragged to the
+// edge it left — but no further.
+func TestWheelDragsTheCursorOnlyToTheEdge(t *testing.T) {
+	m := model(100)
+	m, _ = m.Update(wheel(false))
+	if m.Cursor() != wheelRows {
+		t.Errorf("Cursor() = %d, want %d: the top row of the new view", m.Cursor(), wheelRows)
+	}
+}
+
+// Scrolled far enough, the cursor has to come along or it would be off screen.
+func TestWheelDragsTheCursorOffTheEdge(t *testing.T) {
+	m := model(100)
+	rows := m.Layout().List.Height
+	for i := 0; i < 20; i++ {
+		m, _ = m.Update(wheel(false))
+	}
+	if m.Cursor() < m.top || m.Cursor() >= m.top+rows {
+		t.Errorf("cursor %d outside the visible rows [%d, %d)", m.Cursor(), m.top, m.top+rows)
+	}
+}
+
+func TestWheelStopsAtBothEnds(t *testing.T) {
+	m := model(100)
+	rows := m.Layout().List.Height
+
+	for i := 0; i < 200; i++ {
+		m, _ = m.Update(wheel(false))
+	}
+	if want := 100 - rows; m.top != want {
+		t.Errorf("top = %d, want %d: never past the last screenful", m.top, want)
+	}
+	for i := 0; i < 200; i++ {
+		m, _ = m.Update(wheel(true))
+	}
+	if m.top != 0 {
+		t.Errorf("top = %d, want 0", m.top)
+	}
+}
+
+func TestWheelOnAnEmptyListDoesNothing(t *testing.T) {
+	m := model(0)
+	m, _ = m.Update(wheel(false))
+	if m.top != 0 || m.Cursor() != -1 {
+		t.Errorf("top = %d, cursor = %d, want 0 and -1", m.top, m.Cursor())
+	}
+}
+
+// Clicking a band is the same as arrowing to it.
+func TestClickSelectsTheRowUnderThePointer(t *testing.T) {
+	m := model(100)
+	l := m.Layout()
+
+	m, _ = m.Update(click(10, l.List.Y+4))
+	if m.Focus() != FocusList {
+		t.Errorf("Focus() = %v, want FocusList", m.Focus())
+	}
+	if m.Cursor() != 4 {
+		t.Errorf("Cursor() = %d, want 4", m.Cursor())
+	}
+
+	// And after scrolling, the row under the pointer is the one it picks.
+	m, _ = m.Update(wheel(false))
+	m, _ = m.Update(click(10, l.List.Y+4))
+	if m.Cursor() != wheelRows+4 {
+		t.Errorf("Cursor() = %d, want %d", m.Cursor(), wheelRows+4)
+	}
+}
+
+func TestClickOnTheSearchAndFilterBands(t *testing.T) {
+	m := model(100)
+	l := m.Layout()
+
+	m, _ = m.Update(click(3, l.Search.Y))
+	if m.Focus() != FocusSearch {
+		t.Errorf("Focus() = %v, want FocusSearch", m.Focus())
+	}
+	m, _ = m.Update(click(3, l.Filters.Y))
+	if m.Focus() != FocusFilters {
+		t.Errorf("Focus() = %v, want FocusFilters", m.Focus())
+	}
+}
+
+func TestClickPastTheLastRowChangesNothing(t *testing.T) {
+	m := model(3) // three rows in a much taller band
+	l := m.Layout()
+	m, _ = m.Update(click(10, l.List.Y+8))
+	if m.Cursor() != 0 {
+		t.Errorf("Cursor() = %d, want it left at 0", m.Cursor())
+	}
+}
+
+func TestMouseReleaseAndMotionAreIgnored(t *testing.T) {
+	m := model(100)
+	l := m.Layout()
+	for _, msg := range []tea.MouseMsg{
+		{X: 10, Y: l.List.Y + 4, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease},
+		{X: 10, Y: l.List.Y + 4, Button: tea.MouseButtonNone, Action: tea.MouseActionMotion},
+	} {
+		m, _ = m.Update(msg)
+		if m.Cursor() != 0 {
+			t.Errorf("%v moved the cursor to %d", msg.Action, m.Cursor())
+		}
+	}
+}
