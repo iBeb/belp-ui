@@ -1,15 +1,8 @@
-// Package browse is the shape of a belp app that shows a list of things and the
-// detail of whichever one you are pointing at: a bar of filters, a search field,
-// the list, and a preview pane.
+// Package browse is the shape of a belp app that lists things and shows the
+// detail of one: a filter bar, a search field, the list, a preview.
 //
-// It exists because that is not one app's shape but every app's. Written once,
-// two apps agree on where the search field is, what ␛ does and how the list
-// behaves on a short terminal — which is the difference between a suite and a
-// pile of programs that each had their own idea.
-//
-// The package owns the chrome and the geometry. What a row says, and which rows
-// survive a filter, stay with the app: those are the only parts that are
-// genuinely about pull requests, or sessions, or whatever is being listed.
+// It owns the chrome and the geometry. What a row says, and which rows survive a
+// filter, stay with the app.
 package browse
 
 // Region is a horizontal band of the screen: the row it starts on and how many
@@ -91,11 +84,10 @@ const (
 
 // Compute divides a terminal of this size into bands.
 //
-// The footer is pinned to the last row and the list absorbs whatever is left, so
-// the layout always fills the terminal exactly. When there is not enough room
-// the bands are given up in a fixed order — the preview first, then the filter
-// bar, then the header and its rule — so that shrinking a window degrades the
-// same way every time instead of rearranging the screen.
+// The footer is pinned to the last row and the list absorbs the slack, so the
+// bands fill the terminal exactly. Too little room and they are given up in a
+// fixed order — preview, filter bar, header — so shrinking degrades the same way
+// every time.
 func Compute(width, height int) Layout {
 	l := Layout{Width: max(0, width), Height: max(0, height)}
 	if l.Height <= 0 || l.Width <= 0 {

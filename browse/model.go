@@ -4,16 +4,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// RowFunc renders row i to at most width cells.
+// RowFunc renders row i to at most width cells, told whether the cursor is on it
+// — restyling a line that already carries escape sequences is not reliable.
 //
-// The app draws its own rows because it is the only thing that knows which of
-// its columns matter. It is told whether the row is the one the cursor is on, so
-// what "selected" looks like is also its decision — restyling a line that has
-// already been rendered is not something anybody can do reliably once the escape
-// sequences are in it.
-//
-// Called only for rows that are actually on screen, so a list of ten thousand
-// costs the same to draw as a list of ten.
+// Called only for rows on screen, so ten thousand rows cost what a screenful does.
 type RowFunc func(i, width int, selected bool) string
 
 // PreviewFunc renders the detail of row i into a band of this size.

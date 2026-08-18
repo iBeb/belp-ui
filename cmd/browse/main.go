@@ -1,12 +1,7 @@
 // Command browse renders a browse screen so it can be judged by eye.
 //
-// The layout arithmetic and the chrome both have tests, but tests assert widths
-// and row numbers — they cannot say whether the thing is pleasant to look at, and
-// that is most of what a design system is for. The rows here are invented; what
-// matters is the frame around them.
-//
-// -h shows what happens as a terminal gets shorter, which is the behaviour least
-// likely to be noticed until it is annoying.
+// Tests assert widths and row numbers; they cannot say whether it looks right.
+// The rows are invented — the frame is the point. -h shows it getting shorter.
 package main
 
 import (

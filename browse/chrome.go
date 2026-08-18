@@ -10,11 +10,8 @@ import (
 
 // Focus is which band the keyboard is talking to.
 //
-// The list by default, because a list you have to click into before you can move
-// in it is a list that feels broken. The search field and the filter bar are the
-// rows above it: moving up out of the first row lands on the search field, and up
-// again on the filters, so there is one way to move around the screen rather than
-// a separate idea per band.
+// The list by default. The search field is the row above the first row and the
+// filter bar the row above that, so ↑ and ↓ are the only way to move.
 type Focus int
 
 const (
@@ -87,16 +84,11 @@ const (
 	keyGap   = "   "
 )
 
-// Render draws a whole screen: the chrome in its bands, rows in the list band,
-// and preview in the preview band.
+// Render draws a whole screen: chrome in its bands, rows in the list, preview in
+// the preview.
 //
-// rows and preview are lines the app has already rendered — this places them and
-// does not restyle them. More lines than the band has rows are dropped rather
-// than overflowing: which rows to show is scrolling, and scrolling belongs to
-// whatever is driving this.
-//
-// The result is exactly l.Height lines, each at most l.Width cells, so a caller
-// can hand it straight to a terminal without measuring anything.
+// rows and preview come already rendered by the app; this places them and drops
+// what does not fit. Returns exactly l.Height lines, each within l.Width.
 func (c Chrome) Render(l Layout, rows, preview []string) string {
 	if l.Height <= 0 || l.Width <= 0 {
 		return ""
@@ -144,14 +136,10 @@ func (c Chrome) Header(width int) string {
 
 // Filters is the chip bar.
 //
-// A focused chip is bracketed and an unfocused one is padded with the spaces the
-// brackets would have taken, so the bar does not shift under the cursor as it
-// moves — which is the kind of jitter that makes a bar hard to read.
-//
-// When it will not fit, the group labels go first: they are decoration, and the
-// chips are the state. What is left is elided rather than cut, because a filter
-// that is set and off the end of the bar means a list filtered in a way you
-// cannot see — the worst failure this bar has available to it.
+// A focused chip is bracketed, an unfocused one padded to the same width, so the
+// bar does not shift under the cursor. Too narrow and the group labels go first,
+// then the rest is elided: a chip that is set and off the end means a list
+// filtered in a way you cannot see.
 func (c Chrome) Filters(width int) string {
 	if full := c.filterBar(true); lipgloss.Width(full) <= width {
 		return full
