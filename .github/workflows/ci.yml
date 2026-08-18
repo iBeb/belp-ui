@@ -23,9 +23,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - uses: golangci/golangci-lint-action@v4
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.56.2   # keep in step with GOLANGCI_VERSION in the Makefile
+          version: v2.12.2   # keep in step with GOLANGCI_VERSION in the Makefile
 
       - name: Test
         run: go test -race ./...

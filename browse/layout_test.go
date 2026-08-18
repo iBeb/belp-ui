@@ -52,8 +52,8 @@ func TestComputeHoldsItsInvariantsAtEverySize(t *testing.T) {
 			}
 			// The footer is pinned to the last row wherever there are two rows
 			// to divide. On a single row the list takes it.
-			switch {
-			case height == 1:
+			switch height {
+			case 1:
 				if !l.Footer.Empty() {
 					t.Errorf("1 row: footer = %+v, want the row to go to the list", l.Footer)
 				}

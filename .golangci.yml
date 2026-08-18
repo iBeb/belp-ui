@@ -1,33 +1,43 @@
 # Defaults plus formatting and a few readability checks. Deliberately short:
 # a wall of linters gets disabled wholesale the first time it is inconvenient.
+version: "2"
+
 run:
   timeout: 3m
 
 linters:
+  # errcheck, govet, ineffassign, staticcheck and unused are on by default in v2.
   enable:
-    - errcheck      # an ignored error is a bug in waiting
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports     # import grouping, so diffs stay small
-    - misspell
-    - revive        # golint's successor: naming, exported comments
     - bodyclose
+    - misspell
+    - revive # golint's successor: naming, exported comments
     - unconvert
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/iBeb
-  misspell:
-    locale: UK
-  revive:
+  settings:
+    misspell:
+      locale: UK
+      # Color is lipgloss's spelling of its own API, not prose we can correct.
+      ignore-rules:
+        - color
+    revive:
+      rules:
+        - name: exported
+          disabled: true # doc comments are required by review, not by a linter
+  exclusions:
+    # v1 applied these silently; v2 makes them a choice.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: true   # doc comments are required by review, not by a linter
+      - path: _test\.go
+        linters: [errcheck] # a failed Close in a test is not the point
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters: [errcheck]   # a failed Close in a test is not the point
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/iBeb
