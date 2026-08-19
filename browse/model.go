@@ -21,6 +21,13 @@ type PreviewFunc func(i, width, height int) []string
 // with it — open it, resume it, whatever the app is for.
 type ActivateMsg struct{ Index int }
 
+// SubmitMsg is Enter in the search field.
+//
+// For a list filtered in memory the query is live and this is noise, so ignoring
+// it costs nothing. It exists for the app whose query is a question worth asking
+// out loud — one that costs a network round trip, and so wants saying when.
+type SubmitMsg struct{ Query string }
+
 // FiltersChangedMsg says a chip was toggled, so whatever the app derives from
 // the filters is now stale.
 //
@@ -235,8 +242,11 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 				m.chrome.Query += " "
 				break
 			}
-			// Down into the list, which is what Enter means in a search field.
+			// Down into the list, which is what Enter means in a search field —
+			// and a submission, for the app whose query costs something to ask.
 			m.chrome.Focus = FocusList
+			q := m.chrome.Query
+			return m, func() tea.Msg { return SubmitMsg{Query: q} }
 		case FocusList:
 			if m.count > 0 {
 				i := m.cursor

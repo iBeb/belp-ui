@@ -190,15 +190,23 @@ func TestBackspaceIsIgnoredOutsideTheSearchField(t *testing.T) {
 	}
 }
 
-func TestEnterOnTheSearchFieldDropsIntoTheList(t *testing.T) {
+func TestEnterOnTheSearchFieldDropsIntoTheListAndSubmits(t *testing.T) {
 	m := model(10)
 	m, _ = press(m, "up") // search
+	m.chrome.Query = "geo"
 	m, cmd := press(m, "enter")
 	if m.Focus() != FocusList {
 		t.Errorf("Focus() = %v, want FocusList", m.Focus())
 	}
-	if cmd != nil {
-		t.Error("Enter in the search field should not activate a row")
+	if cmd == nil {
+		t.Fatal("Enter in the search field produced no command")
+	}
+	msg, ok := cmd().(SubmitMsg)
+	if !ok {
+		t.Fatalf("cmd() = %T, want SubmitMsg: an app whose query costs something needs to know when", cmd())
+	}
+	if msg.Query != "geo" {
+		t.Errorf("SubmitMsg.Query = %q, want %q", msg.Query, "geo")
 	}
 }
 
