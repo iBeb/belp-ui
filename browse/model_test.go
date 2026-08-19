@@ -725,3 +725,133 @@ func TestEscDoesNotQuit(t *testing.T) {
 		t.Errorf("esc changed the state: focus %v, cursor %d", m.Focus(), m.Cursor())
 	}
 }
+
+// A question is asked of the row the cursor is on, so the answer has to be about
+// that row: while one is open the arrows must not move the list underneath it.
+func TestAskIsModal(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "down", "down")
+	before := m.Cursor()
+
+	m.Ask("title: ", "old title")
+	if !m.Asking() || m.Focus() != FocusPrompt {
+		t.Fatalf("Asking() = %v, Focus() = %v, want a prompt", m.Asking(), m.Focus())
+	}
+
+	m, _ = press(m, "down", "down", "up", "pgdown", "home", "end")
+	if m.Cursor() != before {
+		t.Errorf("the cursor moved to %d under an open question, want it to stay at %d",
+			m.Cursor(), before)
+	}
+	// The query is what the sample chrome came with: typing into a question must
+	// not reach the field the question is drawn over.
+	if m.Query() != "geo" {
+		t.Errorf("Query() = %q, want it untouched at %q", m.Query(), "geo")
+	}
+}
+
+// The same editing keys as the search field, and ^U clears the answer rather than
+// the query it is drawn over.
+func TestAskEditsItsOwnText(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "down") // focus the list
+	m.Ask("title: ", "site ABC-8714 ")
+	m, _ = press(m, "s", "p", "l", "i", "t")
+
+	_, cmd := press(m, "enter")
+	msg, ok := cmd().(AnsweredMsg)
+	if !ok {
+		t.Fatalf("cmd() = %T, want AnsweredMsg", cmd())
+	}
+	if want := "site ABC-8714 split"; msg.Text != want {
+		t.Errorf("answer = %q, want %q", msg.Text, want)
+	}
+	if msg.Label != "title: " {
+		t.Errorf("label = %q, want the question back with the answer", msg.Label)
+	}
+
+	m.Ask("title: ", "throw this away")
+	m, _ = press(m, "ctrl+u")
+	m, _ = press(m, "k", "e", "p", "t")
+	_, cmd = press(m, "enter")
+	if got := cmd().(AnsweredMsg).Text; got != "kept" {
+		t.Errorf("after ^U the answer is %q, want %q", got, "kept")
+	}
+
+	// ^W drops the last word and leaves the space that separated it, which the
+	// backspace then takes.
+	m.Ask("title: ", "one two three")
+	m, _ = press(m, "ctrl+w", "backspace")
+	_, cmd = press(m, "enter")
+	if got := cmd().(AnsweredMsg).Text; got != "one two" {
+		t.Errorf("after ^W and backspace the answer is %q, want %q", got, "one two")
+	}
+}
+
+// Esc is free for this precisely because quitting is not spent on it.
+func TestEscAbandonsTheQuestionAndCtrlQStillQuits(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up") // the search field, so the focus has somewhere to return to
+	m.Ask("move to: ", "")
+
+	after, cmd := press(m, "esc")
+	msg, ok := cmd().(CancelledMsg)
+	if !ok {
+		t.Fatalf("cmd() = %T, want CancelledMsg", cmd())
+	}
+	if msg.Label != "move to: " {
+		t.Errorf("CancelledMsg.Label = %q", msg.Label)
+	}
+	if after.Asking() {
+		t.Error("the question is still open after Esc")
+	}
+	if after.Focus() != FocusSearch {
+		t.Errorf("Focus() = %v after answering, want the band that asked (FocusSearch)", after.Focus())
+	}
+
+	m.Ask("title: ", "")
+	if _, cmd := press(m, "ctrl+q"); cmd == nil {
+		t.Fatal("^Q under an open question produced no command")
+	} else if _, ok := cmd().(QuitMsg); !ok {
+		t.Errorf("cmd() = %T, want QuitMsg — a modal you cannot quit out of is a trap", cmd())
+	}
+}
+
+// The footer is the one row a question can borrow: while it is open, none of the
+// key hints it replaces apply anyway.
+func TestTheQuestionTakesTheFooterRow(t *testing.T) {
+	m := model(10)
+	l := m.Layout()
+
+	m.Ask("title: ", "SV PR#853")
+	lines := strings.Split(m.View(), "\n")
+	footer := lines[l.Footer.Y]
+	if !strings.Contains(footer, "title:") || !strings.Contains(footer, "SV PR#853") {
+		t.Errorf("footer = %q, want the question and the answer so far", footer)
+	}
+	for _, hint := range []string{"open", "review", "quit"} {
+		if strings.Contains(footer, hint) {
+			t.Errorf("footer = %q, want the key hints replaced, not shared with %q", footer, hint)
+		}
+	}
+
+	// And the rest of the screen is untouched: a question is not a new screen.
+	if got := lines[l.List.Y]; !strings.Contains(got, "row0") {
+		t.Errorf("first list row = %q, want the list still drawn under the question", got)
+	}
+}
+
+// A screen that changes mode has to be able to say so: a list of folders to move
+// into is still a list, but "↵ resume" is then a lie about what Enter does.
+func TestSetKeysRelabelsTheFooter(t *testing.T) {
+	m := model(10)
+	m.SetKeys([]Key{{"↵", "move here"}, {"␛", "cancel"}})
+
+	footer := strings.Split(m.View(), "\n")[m.Layout().Footer.Y]
+	if !strings.Contains(footer, "move here") || !strings.Contains(footer, "cancel") {
+		t.Errorf("footer = %q, want the new hints", footer)
+	}
+	if strings.Contains(footer, "review") {
+		t.Errorf("footer = %q, want the old hints gone", footer)
+	}
+}

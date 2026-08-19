@@ -36,6 +36,21 @@ type SubmitMsg struct{ Query string }
 // labelled "30 days" means something only the app knows.
 type FiltersChangedMsg struct{}
 
+// AnsweredMsg is Enter on an open prompt: the answer, and the label it answers.
+//
+// The label comes back so that an app with more than one question does not have
+// to remember which one it asked — the screen already knows.
+type AnsweredMsg struct {
+	Label string
+	Text  string
+}
+
+// CancelledMsg is Esc on an open prompt.
+//
+// A message rather than silence: what an abandoned question undoes is the app's
+// business, and something is usually mid-flight by the time it is asked.
+type CancelledMsg struct{ Label string }
+
 // QuitMsg is Esc or ^C.
 //
 // A message rather than tea.Quit: whether those keys end the program is the
@@ -56,6 +71,10 @@ type Model struct {
 	count  int // how many rows there are
 	cursor int // which one the cursor is on
 	top    int // the first row on screen
+
+	// Where the focus goes when an open prompt closes, either way. Kept so that
+	// answering a question puts you back on the row you asked it of.
+	returnTo Focus
 
 	// Where the cursor sits on the filter bar. Kept here rather than as flags
 	// on the options so that there is one cursor, not one per group that has to
@@ -90,6 +109,39 @@ func (m *Model) SetRowCount(n int) {
 
 // SetStatus replaces the right-hand side of the header.
 func (m *Model) SetStatus(s string) { m.chrome.Status = s }
+
+// SetKeys replaces the footer hints.
+//
+// For a screen that has changed mode: a list showing folders to move a session
+// into is still a list, but "↵ resume" is then a lie about what Enter does.
+func (m *Model) SetKeys(keys []Key) { m.chrome.Keys = keys }
+
+// Ask opens a question in the footer, with initial already typed into it.
+//
+// The answer arrives as an AnsweredMsg and an abandoned question as a
+// CancelledMsg. Modal while it is open: the arrows stop moving the list, because
+// the question is about the row it was asked of and a list that moved underneath
+// would answer it about something else.
+func (m *Model) Ask(label, initial string) {
+	if m.chrome.Focus != FocusPrompt {
+		m.returnTo = m.chrome.Focus
+	}
+	m.chrome.Focus = FocusPrompt
+	m.chrome.Prompt = Prompt{Label: label, Text: initial}
+}
+
+// Asking is whether a question is open, for an app deciding whether a key of its
+// own is a key or a character.
+func (m Model) Asking() bool { return m.chrome.Focus == FocusPrompt }
+
+// close puts the question away and the focus back, returning what was asked and
+// what had been typed.
+func (m *Model) close() (label, text string) {
+	label, text = m.chrome.Prompt.Label, m.chrome.Prompt.Text
+	m.chrome.Prompt = Prompt{}
+	m.chrome.Focus = m.returnTo
+	return label, text
+}
 
 // SetSize is what a tea.WindowSizeMsg would set, for a caller that handles the
 // message itself.
@@ -188,6 +240,12 @@ func (m *Model) scroll(delta int) {
 
 func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	rows := m.Layout().List.Height
+
+	// An open question owns the keyboard, apart from the two keys that end the
+	// program: a modal you cannot quit out of is a trap.
+	if m.chrome.Focus == FocusPrompt {
+		return m.prompt(msg)
+	}
 
 	switch msg.String() {
 	// ^Q and ^C, never Esc. Esc is too useful inside an app — backing out of a
@@ -297,6 +355,47 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	m.clamp()
+	return m, nil
+}
+
+// prompt is the keyboard while a question is open.
+//
+// The same editing keys as the search field, deliberately: one line editor to
+// learn, and ^U clearing the answer rather than the query it is drawn over.
+func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+q", "ctrl+c":
+		return m, func() tea.Msg { return QuitMsg{} }
+
+	case "enter":
+		label, text := m.close()
+		return m, func() tea.Msg { return AnsweredMsg{Label: label, Text: text} }
+
+	// Esc, which is free precisely because quitting is not spent on it.
+	case "esc":
+		label, _ := m.close()
+		return m, func() tea.Msg { return CancelledMsg{Label: label} }
+
+	case "ctrl+u":
+		m.chrome.Prompt.Text = ""
+	case "ctrl+w":
+		m.chrome.Prompt.Text = dropWord(m.chrome.Prompt.Text)
+	case "backspace":
+		if r := []rune(m.chrome.Prompt.Text); len(r) > 0 {
+			m.chrome.Prompt.Text = string(r[:len(r)-1])
+		}
+
+	default:
+		// Space arrives as a rune here rather than as the list's Enter-alike:
+		// inside an answer it is a character like any other.
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			if msg.Type == tea.KeySpace {
+				m.chrome.Prompt.Text += " "
+				break
+			}
+			m.chrome.Prompt.Text += string(msg.Runes)
+		}
+	}
 	return m, nil
 }
 

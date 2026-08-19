@@ -18,6 +18,12 @@ const (
 	FocusList Focus = iota
 	FocusSearch
 	FocusFilters
+
+	// FocusPrompt is a question the app asked — a title to type, a name to
+	// confirm. It is modal on purpose: while one is open the arrows must not
+	// move a list underneath it, because the answer is about the row the
+	// question was asked of.
+	FocusPrompt
 )
 
 // Option is one filter chip.
@@ -56,6 +62,17 @@ type Key struct {
 	Desc string // "open", "review"
 }
 
+// Prompt is a question being asked of whatever the cursor is on.
+//
+// It is drawn in the footer band rather than in one of its own: a question is
+// transient, and a row given up permanently to something that appears twice a
+// day is a row the list wanted. The key hints are what it replaces, which is
+// also honest — while a question is open, none of them apply.
+type Prompt struct {
+	Label string // "title: ", "move to: "
+	Text  string
+}
+
 // Chrome is everything a browse screen draws except the rows themselves.
 //
 // The rows and the preview text stay with the app: they are the only part that
@@ -72,6 +89,9 @@ type Chrome struct {
 	Query  string
 	Focus  Focus
 	Keys   []Key
+
+	// Prompt is drawn instead of Keys while Focus is FocusPrompt.
+	Prompt Prompt
 
 	// Placeholder shows in the search field while it is empty.
 	Placeholder string
@@ -111,7 +131,11 @@ func (c Chrome) Render(l Layout, rows, preview []string) string {
 	put(l.List, fitAll(rows, l.List.Height, l.Width)...)
 	put(l.PreviewRule, c.Rule(l.Width))
 	put(l.Preview, fitAll(preview, l.Preview.Height, l.Width)...)
-	put(l.Footer, c.Footer(l.Width))
+	if c.Focus == FocusPrompt {
+		put(l.Footer, c.Ask(l.Width))
+	} else {
+		put(l.Footer, c.Footer(l.Width))
+	}
 
 	return strings.Join(out, "\n")
 }
@@ -222,6 +246,27 @@ func (c Chrome) Footer(width int) string {
 		b.WriteString(gap + hint)
 	}
 	return fit(b.String(), width)
+}
+
+// Ask draws the open question and what has been typed into it.
+//
+// Elided from the left as it outgrows the width, like the search field: you are
+// typing at the end, so the end is the part that has to stay visible. The caret
+// is drawn rather than left to the terminal, because a full-frame redraw parks
+// the real cursor wherever the last line ended.
+func (c Chrome) Ask(width int) string {
+	s := c.Styles
+	label := s.KeyName.Render(c.Prompt.Label)
+	room := width - lipgloss.Width(label) - 1 // the caret
+
+	text := c.Prompt.Text
+	if room > 0 && lipgloss.Width(text) > room {
+		runes := []rune(text)
+		if n := len(runes) - room + 1; n > 0 && n < len(runes) {
+			text = "…" + string(runes[n:])
+		}
+	}
+	return fit(label+s.Value.Render(text)+s.Selected.Render("▏"), width)
 }
 
 // Rule is a separator across the full width.
