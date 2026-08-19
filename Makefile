@@ -1,7 +1,7 @@
 # Everything CI runs, runnable locally with the same command.
 # `make check` is the gate: if it passes here it passes there.
 
-GOLANGCI_VERSION ?= v1.56.2   # keep in step with .github/workflows/ci.yml
+GOLANGCI_VERSION ?= v2.12.2   # keep in step with .github/workflows/ci.yml
 
 .PHONY: check build test fmt vet lint tidy tools clean
 
@@ -30,7 +30,7 @@ tidy: ## drop unused requirements, verify the checksums
 	go mod verify
 
 tools: ## install the pinned linter
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
 clean:
 	go clean -cache -testcache
