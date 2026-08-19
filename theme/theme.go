@@ -62,6 +62,7 @@ type Styles struct {
 	Rule     lipgloss.Style
 	KeyName  lipgloss.Style // "^G"
 	KeyDesc  lipgloss.Style // "grep"
+	Cursor   lipgloss.Style // the caret of a text field being typed into
 	Success  lipgloss.Style
 	Warn     lipgloss.Style
 	Danger   lipgloss.Style
@@ -71,6 +72,15 @@ type Styles struct {
 // triangle. That glyph exists only in a patched font, and an app that renders
 // as tofu on a stock terminal is worse than one that renders plainly anywhere.
 const Chevron = "›"
+
+// Caret is the block a text field draws where the next character will land.
+//
+// Drawn rather than left to the terminal: an app that repaints whole frames
+// parks the real cursor wherever the last line ended, and bubbletea hides it
+// besides, so a field that wants a cursor has to paint one. A block, because
+// that is what a terminal cursor looks like — anything thinner reads as
+// punctuation someone typed.
+const Caret = "█"
 
 // New builds the styles for a palette.
 func New(p Palette) Styles {
@@ -91,6 +101,7 @@ func New(p Palette) Styles {
 		Rule:     fg(p.Faint),
 		KeyName:  fg(p.Key).Bold(true),
 		KeyDesc:  fg(p.Dim),
+		Cursor:   fg(p.Dim),
 		Success:  fg(p.Success),
 		Warn:     fg(p.Warn),
 		Danger:   fg(p.Danger),

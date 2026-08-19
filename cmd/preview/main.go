@@ -87,6 +87,11 @@ func render(darkBG bool) string {
 		s.Label.Render("     Branch ") + s.Value.Render("main"),
 		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed"),
 		"",
+		// The caret is a block of colour rather than a glyph with a shape, so
+		// whether it reads as a cursor or as a hole in the line is a thing only
+		// an eye can settle, and only against both backgrounds.
+		s.Desc.Render(theme.Chevron) + " " + s.Value.Render("geo") + s.Cursor.Render(theme.Caret),
+		"",
 		s.KeyName.Render("↵") + " " + s.KeyDesc.Render("open") + "   " +
 			s.KeyName.Render("^G") + " " + s.KeyDesc.Render("grep"),
 	}

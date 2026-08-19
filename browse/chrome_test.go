@@ -267,6 +267,77 @@ func TestSearchElidesFromTheLeft(t *testing.T) {
 	}
 }
 
+// One cursor on the screen, and it belongs to whatever the keyboard is talking
+// to: a caret in an unfocused field points at a place typing would not go.
+func TestSearchDrawsACaretOnlyWhileFocused(t *testing.T) {
+	c := sample()
+
+	if got := c.Search(40); strings.Contains(got, theme.Caret) {
+		t.Errorf("Search() = %q, want no caret while the list has the focus", got)
+	}
+
+	c.Focus = FocusSearch
+	got := c.Search(40)
+	if !strings.Contains(got, theme.Caret) {
+		t.Errorf("Search() = %q, want a caret in the focused field", got)
+	}
+	// After the query: that is where the next character lands.
+	if strings.Index(got, theme.Caret) < strings.Index(got, "geo") {
+		t.Errorf("Search() = %q, want the caret after the query", got)
+	}
+}
+
+// An empty field is typed into at the front, so that is where the caret goes,
+// with the placeholder trailing it rather than swallowing it.
+func TestSearchCaretLeadsThePlaceholder(t *testing.T) {
+	c := sample()
+	c.Focus = FocusSearch
+	c.Query = ""
+
+	got := c.Search(40)
+	if !strings.Contains(got, "type to filter") {
+		t.Errorf("Search() = %q, want the placeholder", got)
+	}
+	if strings.Index(got, theme.Caret) > strings.Index(got, "type to filter") {
+		t.Errorf("Search() = %q, want the caret before the placeholder", got)
+	}
+}
+
+// The caret costs a cell, and a field elided to the width has none to spare: an
+// elision that does not account for it is a caret pushed off the end, so the
+// focused field looks like the unfocused one exactly when it matters.
+func TestSearchKeepsTheCaretWhenElided(t *testing.T) {
+	c := sample()
+	c.Focus = FocusSearch
+	c.Query = "a very long query that will not fit in a narrow field"
+
+	for _, width := range []int{20, 30, 40} {
+		got := c.Search(width)
+		if w := lipgloss.Width(got); w > width {
+			t.Errorf("Search(%d) is %d cells: %q", width, w, got)
+		}
+		if !strings.Contains(got, theme.Caret) {
+			t.Errorf("Search(%d) = %q, want the caret kept", width, got)
+		}
+	}
+}
+
+// The question in the footer is the same line editor as the search field, so it
+// marks where you are typing the same way.
+func TestAskDrawsTheSameCaret(t *testing.T) {
+	c := sample()
+	c.Focus = FocusPrompt
+	c.Prompt = Prompt{Label: "title: ", Text: "site ABC-8714"}
+
+	got := c.Ask(40)
+	if !strings.Contains(got, theme.Caret) {
+		t.Errorf("Ask() = %q, want a caret", got)
+	}
+	if strings.Index(got, theme.Caret) < strings.Index(got, "4178") {
+		t.Errorf("Ask() = %q, want the caret after the answer", got)
+	}
+}
+
 // Half a binding reads as a key that does something unnameable.
 func TestFooterDropsWholeHintsThatDoNotFit(t *testing.T) {
 	c := sample()

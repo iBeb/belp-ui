@@ -1,7 +1,8 @@
 // Command browse renders a browse screen so it can be judged by eye.
 //
 // Tests assert widths and row numbers; they cannot say whether it looks right.
-// The rows are invented — the frame is the point. -h shows it getting shorter.
+// The rows are invented — the frame is the point. -h shows it getting shorter,
+// -focus moves the cursor between the bands.
 package main
 
 import (
@@ -20,6 +21,7 @@ func main() {
 	width := flag.Int("w", 104, "terminal width")
 	height := flag.Int("h", 30, "terminal height; try 9 to see the preview go")
 	light := flag.Bool("light", false, "render as if the terminal were light")
+	focus := flag.String("focus", "list", "band with the focus: list, search, filters or prompt")
 	flag.Parse()
 
 	// Forced, so the output is the same through a pipe, in CI and on screen.
@@ -31,11 +33,11 @@ func main() {
 
 	fmt.Printf("%dx%d — list %d row(s), preview %d row(s)\n\n",
 		l.Width, l.Height, l.List.Height, l.Preview.Height)
-	fmt.Println(chrome(s).Render(l, rows(s, l.List.Height, l.Width), preview(s)))
+	fmt.Println(chrome(s, *focus).Render(l, rows(s, l.List.Height, l.Width), preview(s)))
 }
 
-func chrome(s theme.Styles) browse.Chrome {
-	return browse.Chrome{
+func chrome(s theme.Styles, focus string) browse.Chrome {
+	c := browse.Chrome{
 		Styles: s,
 		App:    "belp",
 		Crumbs: []string{"Sillage"},
@@ -69,6 +71,22 @@ func chrome(s theme.Styles) browse.Chrome {
 			{Name: "^Q", Desc: "quit"},
 		},
 	}
+
+	// The focus is what decides where the caret is and which chip is bracketed,
+	// so it is the one piece of state worth being able to move from the command
+	// line: those are the parts a test can only say are present, not that they
+	// landed anywhere sensible.
+	switch focus {
+	case "search":
+		c.Focus = browse.FocusSearch
+	case "filters":
+		c.Focus = browse.FocusFilters
+		c.Groups[0].Options[2].Focused = true
+	case "prompt":
+		c.Focus = browse.FocusPrompt
+		c.Prompt = browse.Prompt{Label: "title: ", Text: "site ABC-8714_Consolidate"}
+	}
+	return c
 }
 
 // rows is what an app supplies: already styled, already its own business.

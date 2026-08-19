@@ -207,8 +207,10 @@ func (c Chrome) filterBar(labels bool) string {
 // the end is the part that has to stay visible.
 func (c Chrome) Search(width int) string {
 	s := c.Styles
+	focused := c.Focus == FocusSearch
+
 	prompt := s.Desc.Render("›")
-	if c.Focus == FocusSearch {
+	if focused {
 		prompt = s.Selected.Render("›")
 	}
 
@@ -218,10 +220,27 @@ func (c Chrome) Search(width int) string {
 	}
 
 	room := width - 2 // "› "
+	if focused {
+		room-- // the caret
+	}
 	if room > 0 && lipgloss.Width(body) > room {
 		runes := []rune(c.Query)
 		if n := len(runes) - room + 1; n > 0 && n < len(runes) {
 			body = s.Desc.Render("…") + s.Value.Render(string(runes[n:]))
+		}
+	}
+
+	// The caret goes where the next character will land: after the query, or at
+	// the front of the field while it is empty, with the placeholder trailing
+	// it. Only while the field has the focus — a caret in a band the keyboard is
+	// not talking to claims a cursor that is in fact somewhere else, and there
+	// is only ever one.
+	if focused {
+		caret := s.Cursor.Render(theme.Caret)
+		if c.Query == "" {
+			body = caret + body
+		} else {
+			body += caret
 		}
 	}
 	return fit(prompt+" "+body, width)
@@ -252,8 +271,9 @@ func (c Chrome) Footer(width int) string {
 //
 // Elided from the left as it outgrows the width, like the search field: you are
 // typing at the end, so the end is the part that has to stay visible. The caret
-// is drawn rather than left to the terminal, because a full-frame redraw parks
-// the real cursor wherever the last line ended.
+// is the search field's, because the two are the same line editor and a question
+// that marked where you are typing differently would read as a different kind of
+// field. It is always drawn: a question is only ever open while it has the focus.
 func (c Chrome) Ask(width int) string {
 	s := c.Styles
 	label := s.KeyName.Render(c.Prompt.Label)
@@ -266,7 +286,7 @@ func (c Chrome) Ask(width int) string {
 			text = "…" + string(runes[n:])
 		}
 	}
-	return fit(label+s.Value.Render(text)+s.Selected.Render("▏"), width)
+	return fit(label+s.Value.Render(text)+s.Cursor.Render(theme.Caret), width)
 }
 
 // Rule is a separator across the full width.
