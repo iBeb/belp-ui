@@ -3,7 +3,7 @@
 
 GOLANGCI_VERSION ?= v2.12.2   # keep in step with .github/workflows/ci.yml
 
-.PHONY: check build test fmt vet lint tidy tools clean preview
+.PHONY: check build test fmt vet lint tidy tools clean preview release release-plan
 
 check: fmt vet lint test ## everything CI runs
 
@@ -34,6 +34,15 @@ tools: ## install the pinned linter
 
 preview: ## render the theme, both light and dark
 	go run ./cmd/preview
+
+release-plan: ## show the tag a release would create, and why
+	@scripts/release.sh plan
+
+# Depends on check: a tag is what another repo pins, so it names a commit that
+# built and passed. LEVEL overrides the bump the commit subjects imply, and NOTE
+# adds the phrase after the number.
+release: check ## tag the next version and push it (LEVEL=, NOTE= override)
+	@scripts/release.sh tag $(LEVEL)
 
 clean:
 	go clean -cache -testcache
