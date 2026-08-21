@@ -32,10 +32,15 @@ tidy: ## drop unused requirements, verify the checksums
 tools: ## install the pinned linter
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
-font: ## install the glyphs the icons need
-	@# Symbols-only, so a terminal falls back to it per glyph and nobody has to
-	@# give up the text font they already like.
-	brew install --cask font-symbols-only-nerd-font
+font: ## install the patched font the icons need
+	@# The terminal's own font has to carry the glyphs. A symbols-only fallback
+	@# does not help: a private-use codepoint has no script, so nothing can infer
+	@# a fallback font from it. Installing is half the job — the profile has to
+	@# name it too.
+	brew install --cask font-jetbrains-mono-nerd-font
+	@echo
+	@echo "Now set your terminal profile's font to JetBrainsMono Nerd Font,"
+	@echo "then check with: make icons"
 
 icons: ## show the candidate icons, to be judged by eye
 	go run ./cmd/icons

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/iBeb/belp-ui/icons"
 	"github.com/iBeb/belp-ui/theme"
 )
 
@@ -118,6 +119,13 @@ func main() {
 		}
 		fmt.Println()
 	}
+
+	fmt.Println()
+	fmt.Println(s.Heading.Render("the set the apps actually use"))
+	for _, g := range icons.All {
+		fmt.Print(s.Value.Render(g.Glyph) + " " + s.Desc.Render(fmt.Sprintf("%-22s", g.Name)))
+	}
+	fmt.Println()
 
 	fmt.Println()
 	fmt.Println(s.Heading.Render("the chip bar, first choice of each"))
