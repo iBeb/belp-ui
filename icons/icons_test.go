@@ -9,8 +9,9 @@ func TestEveryGlyphIsASingleRune(t *testing.T) {
 		r := []rune(g.Glyph)
 		if len(r) != 1 {
 			t.Errorf("%s = %q, want one rune, got %d", g.Name, g.Glyph, len(r))
+			continue // the range check below would index past the end
 		}
-		if len(r) == 1 && !(r[0] >= 0xE000 && r[0] <= 0xF8FF) {
+		if r[0] < 0xE000 || r[0] > 0xF8FF {
 			t.Errorf("%s = U+%04X, outside the private use area a Nerd Font patches",
 				g.Name, r[0])
 		}
