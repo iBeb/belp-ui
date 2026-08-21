@@ -3,7 +3,7 @@
 
 GOLANGCI_VERSION ?= v2.12.2   # keep in step with .github/workflows/ci.yml
 
-.PHONY: check build test fmt vet lint tidy tools clean preview release release-plan
+.PHONY: check build test fmt vet lint tidy tools clean preview icons font release release-plan
 
 check: fmt vet lint test ## everything CI runs
 
@@ -31,6 +31,14 @@ tidy: ## drop unused requirements, verify the checksums
 
 tools: ## install the pinned linter
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
+font: ## install the glyphs the icons need
+	@# Symbols-only, so a terminal falls back to it per glyph and nobody has to
+	@# give up the text font they already like.
+	brew install --cask font-symbols-only-nerd-font
+
+icons: ## show the candidate icons, to be judged by eye
+	go run ./cmd/icons
 
 preview: ## render the theme, both light and dark
 	go run ./cmd/preview

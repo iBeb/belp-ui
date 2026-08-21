@@ -39,7 +39,9 @@ tags
 .Trashes
 .AppleDouble
 .LSOverride
-Icon?
+# The literal "Icon\r" macOS file. A character class, because Icon? swallows
+# icons/ too and Icon[\r] matches "Iconr" rather than a carriage return.
+Icon[[:cntrl:]]
 
 # ── Linux / Windows, for anyone else ─────────────────────────────────────────
 *~
