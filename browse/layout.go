@@ -32,8 +32,16 @@ type Layout struct {
 	Header     Region // the app's name and the counts
 	HeaderRule Region
 	Filters    Region // the chips: what kind of thing, in what state, from when
-	Search     Region // the query line
-	SearchRule Region
+
+	// Search is the boxed query field: a border, the line you type on, and the
+	// border again. Three rows for one line of text, which is why it is the
+	// band that carries the separator the list used to get from a rule of its
+	// own — a box and a rule under it is two lines saying the same thing.
+	Search Region
+
+	// Columns is the header naming what the columns of the list hold, for a
+	// screen whose rows are a table. Empty for one whose rows are not.
+	Columns Region
 
 	List Region
 
@@ -52,7 +60,7 @@ func (l *Layout) stack() []band {
 		{"header rule", &l.HeaderRule},
 		{"filters", &l.Filters},
 		{"search", &l.Search},
-		{"search rule", &l.SearchRule},
+		{"columns", &l.Columns},
 		{"list", &l.List},
 		{"preview rule", &l.PreviewRule},
 		{"preview", &l.Preview},
@@ -66,8 +74,11 @@ type band struct {
 }
 
 // The rows above the list that are not the list: header, its rule, the filter
-// bar, the search line and its rule.
-const chromeRows = 5
+// bar, and the three the boxed search field takes.
+const chromeRows = 6
+
+// searchRows is the height of that box: the field, and a border above and below.
+const searchRows = 3
 
 // minList is how short the list may get before the preview is given up. A single
 // row of list beside a fourteen-row preview is not a list you can browse — and
@@ -82,13 +93,18 @@ const (
 	previewMax = 14
 )
 
-// Compute divides a terminal of this size into bands.
+// Compute divides a terminal of this size into bands, columns saying whether the
+// screen wants a header row naming what its columns hold.
 //
 // The footer is pinned to the last row and the list absorbs the slack, so the
 // bands fill the terminal exactly. Too little room and they are given up in a
-// fixed order — preview, filter bar, header — so shrinking degrades the same way
-// every time.
-func Compute(width, height int) Layout {
+// fixed order — preview, column header, filter bar, header — so shrinking degrades
+// the same way every time.
+//
+// The column header goes before the filter bar because it can be worked out from
+// the rows themselves, given a moment; which filters are set cannot be worked out
+// from anything on screen.
+func Compute(width, height int, columns bool) Layout {
 	l := Layout{Width: max(0, width), Height: max(0, height)}
 	if l.Height <= 0 || l.Width <= 0 {
 		return l
@@ -103,7 +119,7 @@ func Compute(width, height int) Layout {
 		rest--
 	}
 
-	wantHeader, wantFilters := true, true
+	wantHeader, wantFilters, wantColumns := true, true, columns
 	for {
 		fixed := chromeRows
 		if !wantHeader {
@@ -111,6 +127,9 @@ func Compute(width, height int) Layout {
 		}
 		if !wantFilters {
 			fixed--
+		}
+		if wantColumns {
+			fixed++
 		}
 
 		preview := clamp(l.Height/3, previewMin, previewMax)
@@ -121,14 +140,16 @@ func Compute(width, height int) Layout {
 			list = rest - fixed
 		}
 		if list >= 1 {
-			l.Search = Region{Height: 1}
-			l.SearchRule = Region{Height: 1}
+			l.Search = Region{Height: searchRows}
 			if wantHeader {
 				l.Header = Region{Height: 1}
 				l.HeaderRule = Region{Height: 1}
 			}
 			if wantFilters {
 				l.Filters = Region{Height: 1}
+			}
+			if wantColumns {
+				l.Columns = Region{Height: 1}
 			}
 			l.List = Region{Height: list}
 			if preview > 0 {
@@ -140,6 +161,8 @@ func Compute(width, height int) Layout {
 
 		// Still no room. Give something up, in the order that costs least.
 		switch {
+		case wantColumns:
+			wantColumns = false
 		case wantFilters:
 			wantFilters = false
 		case wantHeader:
@@ -147,7 +170,8 @@ func Compute(width, height int) Layout {
 		default:
 			// Nothing left to drop: the list takes what there is, even if that
 			// is a single row with no search field above it.
-			l.Search, l.SearchRule = Region{}, Region{}
+			l.Search = Region{}
+			l.Columns = Region{}
 			l.List = Region{Height: rest}
 			l.assign()
 			return l

@@ -8,7 +8,7 @@ import "testing"
 func TestComputeHoldsItsInvariantsAtEverySize(t *testing.T) {
 	for height := 0; height <= 80; height++ {
 		for _, width := range []int{0, 1, 20, 80, 200} {
-			l := Compute(width, height)
+			l := Compute(width, height, false)
 
 			if l.Width != max(0, width) || l.Height != max(0, height) {
 				t.Fatalf("%dx%d: Layout reports %dx%d", width, height, l.Width, l.Height)
@@ -75,8 +75,10 @@ func TestComputeHoldsItsInvariantsAtEverySize(t *testing.T) {
 				t.Errorf("%dx%d: preview rule and preview disagree (%v, %v)",
 					width, height, l.PreviewRule, l.Preview)
 			}
-			if !l.SearchRule.Empty() && l.Search.Empty() {
-				t.Errorf("%dx%d: a search rule with no search field", width, height)
+			// The search field is a box: it is three rows or it is none.
+			if h := l.Search.Height; h != 0 && h != searchRows {
+				t.Errorf("%dx%d: search band is %d row(s), want 0 or %d",
+					width, height, h, searchRows)
 			}
 		}
 	}
@@ -87,7 +89,7 @@ func TestComputeHoldsItsInvariantsAtEverySize(t *testing.T) {
 func TestComputeOnlyGainsBandsAsTheTerminalGrows(t *testing.T) {
 	var prev Layout
 	for height := 1; height <= 80; height++ {
-		l := Compute(80, height)
+		l := Compute(80, height, false)
 		if height > 1 {
 			for i, b := range l.stack() {
 				was := prev.stack()[i]
@@ -106,7 +108,7 @@ func TestComputeOnlyGainsBandsAsTheTerminalGrows(t *testing.T) {
 // browse, and it is the first thing given up when it would.
 func TestComputeGivesUpThePreviewBeforeTheList(t *testing.T) {
 	for height := 1; height <= 80; height++ {
-		l := Compute(80, height)
+		l := Compute(80, height, false)
 		if l.Preview.Empty() {
 			continue
 		}
@@ -124,7 +126,7 @@ func TestComputeGivesUpThePreviewBeforeTheList(t *testing.T) {
 // A preview at all, on the terminal sizes people actually use.
 func TestComputeShowsAPreviewOnAnOrdinaryTerminal(t *testing.T) {
 	for _, height := range []int{24, 30, 40, 50} {
-		l := Compute(120, height)
+		l := Compute(120, height, false)
 		if l.Preview.Empty() {
 			t.Errorf("%d rows: no preview on a terminal that size", height)
 		}
@@ -135,10 +137,11 @@ func TestComputeShowsAPreviewOnAnOrdinaryTerminal(t *testing.T) {
 }
 
 // One worked example, so the arithmetic is legible and not only asserted about.
-// 30 rows: 5 of chrome at the top, a 10-row preview (a third of 30) with its
-// rule, the footer on the last row, and the list taking the 13 rows left over.
+// 30 rows: 6 of chrome at the top — the search box is three of them — a 10-row
+// preview (a third of 30) with its rule, the footer on the last row, and the list
+// taking the 12 rows left over.
 func TestComputeAtThirtyRows(t *testing.T) {
-	l := Compute(120, 30)
+	l := Compute(120, 30, false)
 
 	want := []struct {
 		name string
@@ -147,9 +150,9 @@ func TestComputeAtThirtyRows(t *testing.T) {
 		{"header", Region{Y: 0, Height: 1}},
 		{"header rule", Region{Y: 1, Height: 1}},
 		{"filters", Region{Y: 2, Height: 1}},
-		{"search", Region{Y: 3, Height: 1}},
-		{"search rule", Region{Y: 4, Height: 1}},
-		{"list", Region{Y: 5, Height: 13}},
+		{"search", Region{Y: 3, Height: 3}},
+		{"columns", Region{Y: 6, Height: 0}}, // no table on this screen
+		{"list", Region{Y: 6, Height: 12}},
 		{"preview rule", Region{Y: 18, Height: 1}},
 		{"preview", Region{Y: 19, Height: 10}},
 		{"footer", Region{Y: 29, Height: 1}},
@@ -165,15 +168,15 @@ func TestComputeAtThirtyRows(t *testing.T) {
 // The narrowest useful screen: no room for a preview, but a list, a search field
 // and a way out.
 func TestComputeOnAShortTerminal(t *testing.T) {
-	l := Compute(80, 10)
+	l := Compute(80, 10, false)
 	if !l.Preview.Empty() {
 		t.Errorf("preview = %+v, want none at 10 rows", l.Preview)
 	}
 	if l.Search.Empty() {
 		t.Error("no search field at 10 rows; the list is unusable without one")
 	}
-	if l.List.Height != 4 {
-		t.Errorf("list = %d rows, want 4 (10 less the 5 chrome rows and the footer)", l.List.Height)
+	if l.List.Height != 3 {
+		t.Errorf("list = %d rows, want 3 (10 less the 6 chrome rows and the footer)", l.List.Height)
 	}
 }
 
@@ -181,7 +184,7 @@ func TestComputeOnAShortTerminal(t *testing.T) {
 // draw off-screen. The list and the footer are the last things standing.
 func TestComputeSurvivesATinyTerminal(t *testing.T) {
 	for height := 2; height <= 7; height++ {
-		l := Compute(40, height)
+		l := Compute(40, height, false)
 		if l.List.Empty() {
 			t.Errorf("%d rows: no list", height)
 		}
@@ -191,7 +194,7 @@ func TestComputeSurvivesATinyTerminal(t *testing.T) {
 	}
 	// One row is the list, with nothing else: whatever is being browsed beats
 	// the hints for how to browse it.
-	l := Compute(40, 1)
+	l := Compute(40, 1, false)
 	if l.List != (Region{Y: 0, Height: 1}) {
 		t.Errorf("1 row: list = %+v, want the whole row", l.List)
 	}
@@ -216,5 +219,46 @@ func TestRegionHelpers(t *testing.T) {
 	}
 	if e.Bottom() != 4 {
 		t.Errorf("Bottom() = %d, want 4 so that iterating draws nothing", e.Bottom())
+	}
+}
+
+// The same 30 rows with a table on the screen: the header takes one, and the list
+// gives it up rather than anything below.
+func TestComputeMakesRoomForAColumnHeader(t *testing.T) {
+	plain, table := Compute(120, 30, false), Compute(120, 30, true)
+
+	if table.Columns != (Region{Y: 6, Height: 1}) {
+		t.Errorf("columns = %+v, want one row directly above the list", table.Columns)
+	}
+	if table.List.Y != 7 || table.List.Height != plain.List.Height-1 {
+		t.Errorf("list = %+v, want it one row shorter and one row lower than %+v",
+			table.List, plain.List)
+	}
+	for name, pair := range map[string][2]Region{
+		"preview rule": {plain.PreviewRule, table.PreviewRule},
+		"preview":      {plain.Preview, table.Preview},
+		"footer":       {plain.Footer, table.Footer},
+	} {
+		if pair[0] != pair[1] {
+			t.Errorf("%s moved to %+v; the header came out of the list, not out of %s",
+				name, pair[1], name)
+		}
+	}
+}
+
+// The column header is the first thing given up, because it is the one piece of
+// chrome you could work out for yourself from the rows under it.
+func TestTheColumnHeaderGoesBeforeTheFilterBar(t *testing.T) {
+	// Tall enough for a list and no more: the header cannot be afforded.
+	for height := 3; height <= 9; height++ {
+		l := Compute(80, height, true)
+		if l.List.Empty() {
+			t.Errorf("%d rows: no list at all", height)
+			continue
+		}
+		if !l.Columns.Empty() && l.Filters.Empty() {
+			t.Errorf("%d rows: kept the column header %+v and gave up the filter bar",
+				height, l.Columns)
+		}
 	}
 }

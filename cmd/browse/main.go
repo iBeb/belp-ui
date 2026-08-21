@@ -29,7 +29,7 @@ func main() {
 	lipgloss.SetHasDarkBackground(!*light)
 
 	s := theme.Default()
-	l := browse.Compute(*width, *height)
+	l := browse.Compute(*width, *height, false)
 
 	fmt.Printf("%dx%d — list %d row(s), preview %d row(s)\n\n",
 		l.Width, l.Height, l.List.Height, l.Preview.Height)

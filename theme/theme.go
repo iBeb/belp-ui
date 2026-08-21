@@ -73,6 +73,21 @@ type Styles struct {
 // as tofu on a stock terminal is worse than one that renders plainly anywhere.
 const Chevron = "›"
 
+// Bullet marks a filter chip that is set.
+//
+// Colour alone cannot carry it. Which chip the cursor is on and which chip is set
+// are two things, and if only one of them has a glyph, a filter set in passing
+// stays invisible until you notice something missing from the screen.
+const Bullet = "•"
+
+// Magnifier marks the search field, in place of a label saying "search".
+//
+// U+2315 rather than the 🔍 emoji or a nerd-font glyph: the emoji is two cells
+// wide and coloured by the font rather than by the palette, and the patched-font
+// one renders as tofu anywhere the font is not installed — the same reason
+// [Chevron] is not a powerline triangle.
+const Magnifier = "⌕"
+
 // Caret is the block a text field draws where the next character will land.
 //
 // Drawn rather than left to the terminal: an app that repaints whole frames

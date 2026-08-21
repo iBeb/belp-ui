@@ -44,7 +44,7 @@ func TestRenderFillsTheTerminalExactly(t *testing.T) {
 
 	for _, height := range []int{1, 2, 5, 8, 10, 24, 30, 60} {
 		for _, width := range []int{10, 40, 80, 200} {
-			l := Compute(width, height)
+			l := Compute(width, height, false)
 			got := c.Render(l, rows, preview)
 
 			lines := strings.Split(got, "\n")
@@ -62,7 +62,7 @@ func TestRenderFillsTheTerminalExactly(t *testing.T) {
 
 func TestRenderPlacesEachBand(t *testing.T) {
 	c := sample()
-	l := Compute(100, 30)
+	l := Compute(100, 30, false)
 	lines := strings.Split(c.Render(l, []string{"the first row"}, []string{"the preview"}), "\n")
 
 	cases := []struct {
@@ -72,7 +72,7 @@ func TestRenderPlacesEachBand(t *testing.T) {
 	}{
 		{"header", l.Header.Y, "belp"},
 		{"filters", l.Filters.Y, "opened"},
-		{"search", l.Search.Y, "geo"},
+		{"search", l.Search.Y + 1, "geo"}, // the row inside the box
 		{"list", l.List.Y, "the first row"},
 		{"preview", l.Preview.Y, "the preview"},
 		{"footer", l.Footer.Y, "open"},
@@ -82,9 +82,16 @@ func TestRenderPlacesEachBand(t *testing.T) {
 			t.Errorf("%s (row %d) = %q, want it to contain %q", tc.name, tc.y, lines[tc.y], tc.want)
 		}
 	}
-	for _, y := range []int{l.HeaderRule.Y, l.SearchRule.Y, l.PreviewRule.Y} {
+	for _, y := range []int{l.HeaderRule.Y, l.PreviewRule.Y} {
 		if !strings.Contains(lines[y], "─") {
 			t.Errorf("row %d = %q, want a rule", y, lines[y])
+		}
+	}
+	// The search box brings its own edges, top and bottom, and the row under it
+	// belongs to the list rather than to a rule repeating what the box said.
+	for _, y := range []int{l.Search.Y, l.Search.Bottom()} {
+		if !strings.Contains(lines[y], "─") {
+			t.Errorf("row %d = %q, want a box edge", y, lines[y])
 		}
 	}
 }
@@ -93,7 +100,7 @@ func TestRenderPlacesEachBand(t *testing.T) {
 // preview. Choosing which rows to show is scrolling, and that is the caller's.
 func TestRenderDropsRowsThatDoNotFit(t *testing.T) {
 	c := sample()
-	l := Compute(80, 24)
+	l := Compute(80, 24, false)
 
 	rows := make([]string, l.List.Height+10)
 	for i := range rows {
@@ -113,7 +120,7 @@ func TestRenderDropsRowsThatDoNotFit(t *testing.T) {
 // A band the layout left out must not be drawn into.
 func TestRenderSkipsAbsentBands(t *testing.T) {
 	c := sample()
-	l := Compute(80, 9) // too short for a preview
+	l := Compute(80, 9, false) // too short for a preview
 	if !l.Preview.Empty() {
 		t.Fatalf("expected no preview at 9 rows, got %+v", l.Preview)
 	}
@@ -178,10 +185,12 @@ func TestFiltersBracketOnlyTheFocusedChipAndOnlyWhenFocused(t *testing.T) {
 
 	c.Focus = FocusFilters
 	got := c.Filters(200)
-	if !strings.Contains(got, "[merged]") {
+	// The cursor is on a chip that is not set, so it gets the brackets and no
+	// bullet: the two say different things and are drawn separately.
+	if !strings.Contains(got, "[ merged]") {
 		t.Errorf("Filters() = %q, want the focused chip bracketed", got)
 	}
-	if strings.Contains(got, "[opened]") {
+	if strings.Contains(got, "[ opened]") || strings.Contains(got, "["+theme.Bullet+"opened]") {
 		t.Errorf("Filters() = %q, want only the focused chip bracketed", got)
 	}
 
@@ -422,8 +431,39 @@ func TestSelectionIsVisible(t *testing.T) {
 func TestRenderOnAnEmptyTerminal(t *testing.T) {
 	c := sample()
 	for _, size := range [][2]int{{0, 0}, {0, 24}, {80, 0}, {-5, -5}} {
-		if got := c.Render(Compute(size[0], size[1]), []string{"row"}, nil); got != "" {
+		if got := c.Render(Compute(size[0], size[1], false), []string{"row"}, nil); got != "" {
 			t.Errorf("Render(%dx%d) = %q, want empty", size[0], size[1], got)
+		}
+	}
+}
+
+// The bullet is what says a filter is set. Colour says it too, but a chip set in
+// passing is otherwise invisible until a column goes missing from the screen.
+func TestASetChipIsMarkedAndNotOnlyColoured(t *testing.T) {
+	c := sample()
+	c.Groups = []Group{{Options: []Option{
+		{Label: "on", Selected: true},
+		{Label: "off"},
+	}}}
+
+	got := c.Filters(200)
+	if !strings.Contains(got, theme.Bullet+"on") {
+		t.Errorf("Filters() = %q, want the set chip marked", got)
+	}
+	if strings.Contains(got, theme.Bullet+"off") {
+		t.Errorf("Filters() = %q, want no mark on the chip that is not set", got)
+	}
+
+	// And it costs the bar no width, whichever chips are set or focused.
+	c.Focus = FocusFilters
+	wide := lipgloss.Width(c.Filters(200))
+	for _, sel := range []bool{true, false} {
+		for _, foc := range []bool{true, false} {
+			c.Groups[0].Options[1] = Option{Label: "off", Selected: sel, Focused: foc}
+			if w := lipgloss.Width(c.Filters(200)); w != wide {
+				t.Errorf("selected=%v focused=%v made the bar %d cells, not %d",
+					sel, foc, w, wide)
+			}
 		}
 	}
 }
