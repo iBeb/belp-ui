@@ -24,6 +24,13 @@ const (
 	// move a list underneath it, because the answer is about the row the
 	// question was asked of.
 	FocusPrompt
+
+	// FocusConfirm is a question with two answers, drawn over the middle of the
+	// screen rather than in a band. A question that has to be answered before
+	// anything else happens should look like one: a line in the footer reads as
+	// one more hint, and the row it is about is still sitting there under the
+	// cursor as though nothing were pending.
+	FocusConfirm
 )
 
 // Option is one filter chip.
@@ -90,12 +97,35 @@ type Chrome struct {
 	Focus  Focus
 	Keys   []Key
 
+	// Columns is a header naming what the columns of the list hold, rendered by
+	// the app: it has to line up with the rows, and only the app knows where its
+	// columns start. Empty for a list whose rows are not a table.
+	Columns string
+
 	// Prompt is drawn instead of Keys while Focus is FocusPrompt.
 	Prompt Prompt
+
+	// Confirm is drawn over the list while Focus is FocusConfirm.
+	Confirm Confirm
 
 	// Placeholder shows in the search field while it is empty.
 	Placeholder string
 }
+
+// Confirm is a yes-or-no question and what turns on the answer.
+//
+// Yes and No are labelled rather than assumed: "resume it anyway" and "leave it"
+// say what will happen, where "OK" and "Cancel" leave the reader to work out
+// which way round the question was.
+type Confirm struct {
+	Question string
+	Detail   []string // a line or two on why it is being asked
+	Yes      string
+	No       string
+}
+
+// Empty reports whether there is no question to draw.
+func (c Confirm) Empty() bool { return c.Question == "" }
 
 // The gap between filter groups, and between footer hints. Two spaces read as
 // one group; this reads as a boundary.
@@ -103,6 +133,25 @@ const (
 	groupGap = "  ·  "
 	keyGap   = "   "
 )
+
+// margin is the cell the filter bar and the preview keep either side of them.
+//
+// Those two are the panels with nothing of their own standing in for it: a row
+// has its marker and the header its app name, but a chip or a field label
+// beginning in column 0 reads as having been cut off rather than placed.
+const margin = 1
+
+// inset moves lines in by the margin. Empty lines are left empty: a line of one
+// space is still a line, and a band that ran out of content should look like it.
+func inset(lines ...string) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		if line != "" {
+			out[i] = strings.Repeat(" ", margin) + line
+		}
+	}
+	return out
+}
 
 // Render draws a whole screen: chrome in its bands, rows in the list, preview in
 // the preview.
@@ -125,16 +174,23 @@ func (c Chrome) Render(l Layout, rows, preview []string) string {
 
 	put(l.Header, c.Header(l.Width))
 	put(l.HeaderRule, c.Rule(l.Width))
-	put(l.Filters, c.Filters(l.Width))
-	put(l.Search, c.Search(l.Width))
-	put(l.SearchRule, c.Rule(l.Width))
+	put(l.Filters, inset(c.Filters(l.Width-2*margin))...)
+	put(l.Search, c.SearchBox(l.Width)...)
+	put(l.Columns, fit(c.Columns, l.Width))
 	put(l.List, fitAll(rows, l.List.Height, l.Width)...)
 	put(l.PreviewRule, c.Rule(l.Width))
-	put(l.Preview, fitAll(preview, l.Preview.Height, l.Width)...)
+	put(l.Preview, inset(fitAll(preview, l.Preview.Height, l.Width-2*margin)...)...)
 	if c.Focus == FocusPrompt {
 		put(l.Footer, c.Ask(l.Width))
 	} else {
 		put(l.Footer, c.Footer(l.Width))
+	}
+
+	// Last, and over the list: a modal that something else can draw on top of is
+	// not modal. The list stays visible around it, because the question is about
+	// the row still highlighted underneath.
+	if c.Focus == FocusConfirm && !c.Confirm.Empty() {
+		c.putWindow(out, l)
 	}
 
 	return strings.Join(out, "\n")
@@ -186,15 +242,18 @@ func (c Chrome) filterBar(labels bool) string {
 			if i > 0 {
 				b.WriteString(" ")
 			}
-			style := s.Desc
+			// A chip carries two things at once and needs a glyph for each: the
+			// brackets are where the cursor is, the bullet is what is set. Every
+			// chip is the same width whichever it has, so the bar does not shift
+			// under the cursor and a set chip does not grow.
+			style, mark, open, close := s.Desc, " ", " ", " "
 			if o.Selected {
-				style = s.Selected
+				style, mark = s.Selected, theme.Bullet
 			}
-			label := " " + o.Label + " "
 			if o.Focused && c.Focus == FocusFilters {
-				label = "[" + o.Label + "]"
+				open, close = "[", "]"
 			}
-			b.WriteString(style.Render(label))
+			b.WriteString(style.Render(open + mark + o.Label + close))
 		}
 		groups = append(groups, b.String())
 	}
@@ -209,9 +268,9 @@ func (c Chrome) Search(width int) string {
 	s := c.Styles
 	focused := c.Focus == FocusSearch
 
-	prompt := s.Desc.Render("›")
+	prompt := s.Desc.Render(theme.Magnifier)
 	if focused {
-		prompt = s.Selected.Render("›")
+		prompt = s.Selected.Render(theme.Magnifier)
 	}
 
 	body := s.Value.Render(c.Query)
@@ -219,7 +278,7 @@ func (c Chrome) Search(width int) string {
 		body = s.Desc.Render(c.Placeholder)
 	}
 
-	room := width - 2 // "› "
+	room := width - 2 // the magnifier and the space after it
 	if focused {
 		room-- // the caret
 	}
@@ -244,6 +303,41 @@ func (c Chrome) Search(width int) string {
 		}
 	}
 	return fit(prompt+" "+body, width)
+}
+
+// SearchBox is the field inside its border: exactly searchRows lines, each
+// within width.
+//
+// The border is what says the field is a field. Rounded, because a query is
+// typed into rather than acted on, and a square box in a screen of plain rules
+// reads as one more panel; blue while it has the focus, which is the same blue
+// the selected row uses, so the eye only ever has to learn one colour for "this
+// is where the keyboard is pointing".
+//
+// The margin either side matches the filter bar above it, so the two left edges
+// line up rather than stepping.
+func (c Chrome) SearchBox(width int) []string {
+	// The border's own two columns, and a cell of padding inside it: a magnifier
+	// touching the border reads as part of the frame rather than as the field's.
+	inner := width - 2*margin - 2 - 2*margin
+	if inner < 1 {
+		// No room to be a box. The field alone is still worth having: it says
+		// what has been typed, which is the part nothing else on screen says.
+		return []string{fit(c.Search(width), width), "", ""}
+	}
+
+	edge := c.Styles.Palette.Faint
+	if c.Focus == FocusSearch {
+		edge = c.Styles.Palette.Accent
+	}
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(edge).
+		Padding(0, margin).
+		Width(inner).
+		Render(c.Search(inner))
+
+	return inset(strings.Split(box, "\n")...)
 }
 
 // Footer is the key hints.
@@ -287,6 +381,64 @@ func (c Chrome) Ask(width int) string {
 		}
 	}
 	return fit(label+s.Value.Render(text)+s.Cursor.Render(theme.Caret), width)
+}
+
+// windowMax is as wide as a question gets. A box the width of the terminal is not
+// a window, it is another band; this keeps it plainly a thing on top.
+const windowMax = 64
+
+// putWindow centres the question over the list.
+func (c Chrome) putWindow(out []string, l Layout) {
+	box := c.Window(min(l.Width-2*margin, windowMax))
+	if len(box) == 0 {
+		return
+	}
+
+	// Centred in the list, or wherever there is room for it: on a short terminal
+	// the list is three rows and the box is five, so it starts at the top of the
+	// band and takes what it needs rather than vanishing.
+	top := l.List.Y + max(0, (l.List.Height-len(box))/2)
+	left := max(0, (l.Width-lipgloss.Width(box[0]))/2)
+	pad := strings.Repeat(" ", left)
+	for i, line := range box {
+		if y := top + i; y >= 0 && y < len(out) {
+			out[y] = fit(pad+line, l.Width)
+		}
+	}
+}
+
+// Window is the question as a bordered box.
+//
+// The answers are drawn as the keys that give them, because a window with no
+// visible way out is a window people quit the program to escape.
+func (c Chrome) Window(width int) []string {
+	if c.Confirm.Empty() || width <= 4 {
+		return nil
+	}
+	s := c.Styles
+
+	body := []string{s.Selected.Render(c.Confirm.Question)}
+	for _, line := range c.Confirm.Detail {
+		body = append(body, s.Desc.Render(line))
+	}
+	yes, no := c.Confirm.Yes, c.Confirm.No
+	if yes == "" {
+		yes = "yes"
+	}
+	if no == "" {
+		no = "no"
+	}
+	body = append(body, "",
+		s.KeyName.Render("y")+" "+s.KeyDesc.Render(yes)+keyGap+
+			s.KeyName.Render("n")+" "+s.KeyDesc.Render(no)+"   "+s.KeyDesc.Render("␛"))
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(s.Palette.Accent).
+		Padding(0, 1).
+		Width(width - 2). // the border takes a cell either side
+		Render(strings.Join(body, "\n"))
+	return strings.Split(box, "\n")
 }
 
 // Rule is a separator across the full width.

@@ -36,6 +36,14 @@ type SubmitMsg struct{ Query string }
 // labelled "30 days" means something only the app knows.
 type FiltersChangedMsg struct{}
 
+// PreviewClickMsg is a click on one line of the preview, counted from the top of
+// the band.
+//
+// A message rather than an activation: the preview is text the app rendered, and
+// only the app knows whether the fourth line points at a commit. The band knows
+// which line was hit and nothing else.
+type PreviewClickMsg struct{ Line int }
+
 // AnsweredMsg is Enter on an open prompt: the answer, and the label it answers.
 //
 // The label comes back so that an app with more than one question does not have
@@ -50,6 +58,16 @@ type AnsweredMsg struct {
 // A message rather than silence: what an abandoned question undoes is the app's
 // business, and something is usually mid-flight by the time it is asked.
 type CancelledMsg struct{ Label string }
+
+// ConfirmedMsg is y on an open confirmation window.
+type ConfirmedMsg struct{ Label string }
+
+// DismissedMsg is n, Esc or Enter on one.
+//
+// Enter dismisses rather than confirms: the questions worth a window are the ones
+// where a stray keypress must not be consent, and Enter is the key most likely to
+// be struck by reflex.
+type DismissedMsg struct{ Label string }
 
 // QuitMsg is Esc or ^C.
 //
@@ -71,6 +89,10 @@ type Model struct {
 	count  int // how many rows there are
 	cursor int // which one the cursor is on
 	top    int // the first row on screen
+
+	// The label of the open confirmation window, so the answer can say which
+	// question it answers.
+	confirming string
 
 	// Where the focus goes when an open prompt closes, either way. Kept so that
 	// answering a question puts you back on the row you asked it of.
@@ -110,6 +132,11 @@ func (m *Model) SetRowCount(n int) {
 // SetStatus replaces the right-hand side of the header.
 func (m *Model) SetStatus(s string) { m.chrome.Status = s }
 
+// SetColumns is the header naming what the columns of the list hold, rendered by
+// the app because it has to line up with rows the app draws. An empty line gives
+// the row back to the list.
+func (m *Model) SetColumns(line string) { m.chrome.Columns = line }
+
 // SetKeys replaces the footer hints.
 //
 // For a screen that has changed mode: a list showing folders to move a session
@@ -130,6 +157,28 @@ func (m *Model) Ask(label, initial string) {
 	m.chrome.Prompt = Prompt{Label: label, Text: initial}
 }
 
+// AskConfirm opens a confirmation window over the list, and answers it with a
+// ConfirmedMsg or a DismissedMsg carrying the label.
+//
+// Modal like a prompt: the arrows stop moving the list, because the question is
+// about the row it was asked of.
+func (m *Model) AskConfirm(label string, c Confirm) {
+	if m.chrome.Focus != FocusConfirm && m.chrome.Focus != FocusPrompt {
+		m.returnTo = m.chrome.Focus
+	}
+	m.confirming = label
+	m.chrome.Focus = FocusConfirm
+	m.chrome.Confirm = c
+}
+
+// Confirming is the label of the open window, or "" when there is none.
+func (m Model) Confirming() string {
+	if m.chrome.Focus != FocusConfirm {
+		return ""
+	}
+	return m.confirming
+}
+
 // Asking is whether a question is open, for an app deciding whether a key of its
 // own is a key or a character.
 func (m Model) Asking() bool { return m.chrome.Focus == FocusPrompt }
@@ -139,6 +188,7 @@ func (m Model) Asking() bool { return m.chrome.Focus == FocusPrompt }
 func (m *Model) close() (label, text string) {
 	label, text = m.chrome.Prompt.Label, m.chrome.Prompt.Text
 	m.chrome.Prompt = Prompt{}
+	m.chrome.Confirm = Confirm{}
 	m.chrome.Focus = m.returnTo
 	return label, text
 }
@@ -166,7 +216,7 @@ func (m Model) Focus() Focus { return m.chrome.Focus }
 
 // Layout is where the bands are, for an app that wants to know how much room its
 // preview has before it goes and fetches anything.
-func (m Model) Layout() Layout { return Compute(m.width, m.height) }
+func (m Model) Layout() Layout { return Compute(m.width, m.height, m.chrome.Columns != "") }
 
 // Update handles a message and returns the model to keep.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
@@ -212,7 +262,10 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 	switch y := msg.Y; {
 	case !l.Filters.Empty() && y == l.Filters.Y:
 		m.chrome.Focus = FocusFilters
-	case !l.Search.Empty() && y == l.Search.Y:
+	// Anywhere on the box, border included: the border is part of what looks
+	// like the field, and a click on it that did nothing would read as the field
+	// refusing the focus.
+	case !l.Search.Empty() && y >= l.Search.Y && y <= l.Search.Bottom():
 		m.chrome.Focus = FocusSearch
 	case y >= l.List.Y && y <= l.List.Bottom():
 		if i := m.top + (y - l.List.Y); i < m.count {
@@ -220,6 +273,12 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			m.cursor = i
 			m.clamp()
 		}
+	case !l.Preview.Empty() && y >= l.Preview.Y && y <= l.Preview.Bottom():
+		// The preview has no cursor to move, so a click is the only way to act on
+		// a line of it. The focus stays where it was: the click was about that
+		// line, not about which band the keyboard is talking to.
+		line := y - l.Preview.Y
+		return m, func() tea.Msg { return PreviewClickMsg{Line: line} }
 	}
 	return m, nil
 }
@@ -243,6 +302,9 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	// An open question owns the keyboard, apart from the two keys that end the
 	// program: a modal you cannot quit out of is a trap.
+	if m.chrome.Focus == FocusConfirm {
+		return m.confirm(msg)
+	}
 	if m.chrome.Focus == FocusPrompt {
 		return m.prompt(msg)
 	}
@@ -355,6 +417,28 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	m.clamp()
+	return m, nil
+}
+
+// confirm is the keyboard while a confirmation window is open.
+//
+// Only three keys mean anything: y, n and Esc. Everything else is swallowed
+// rather than passed through, because a window is a question and typing at it is
+// not an answer — but it must not be answered by accident either.
+func (m Model) confirm(msg tea.KeyMsg) (Model, tea.Cmd) {
+	label := m.confirming
+	switch msg.String() {
+	case "ctrl+q", "ctrl+c":
+		return m, func() tea.Msg { return QuitMsg{} }
+	case "y", "Y":
+		m.close()
+		m.confirming = ""
+		return m, func() tea.Msg { return ConfirmedMsg{Label: label} }
+	case "n", "N", "esc", "enter":
+		m.close()
+		m.confirming = ""
+		return m, func() tea.Msg { return DismissedMsg{Label: label} }
+	}
 	return m, nil
 }
 

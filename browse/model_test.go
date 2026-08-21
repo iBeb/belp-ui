@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/iBeb/belp-ui/theme"
 )
 
 func model(rows int) Model {
@@ -428,7 +431,8 @@ func TestChipCursorIsShownOnlyOnTheFilterBar(t *testing.T) {
 		t.Error("a chip is bracketed although the list has the focus")
 	}
 	m.chrome.Focus = FocusFilters
-	if !strings.Contains(m.View(), "[opened]") {
+	// Bracketed for the cursor, bulleted for being set: "opened" is both.
+	if !strings.Contains(m.View(), "["+theme.Bullet+"opened]") {
 		t.Errorf("View() has no bracketed chip:\n%s", m.View())
 	}
 }
@@ -853,5 +857,134 @@ func TestSetKeysRelabelsTheFooter(t *testing.T) {
 	}
 	if strings.Contains(footer, "review") {
 		t.Errorf("footer = %q, want the old hints gone", footer)
+	}
+}
+
+// The preview has no cursor, so clicking a line of it is the only way to act on
+// what it says. The band reports which line and leaves the meaning to the app.
+func TestClickingThePreviewReportsTheLine(t *testing.T) {
+	m := model(10)
+	l := m.Layout()
+	if l.Preview.Empty() {
+		t.Fatal("no preview band to click")
+	}
+
+	for _, line := range []int{0, 2, l.Preview.Height - 1} {
+		_, cmd := m.Update(tea.MouseMsg{
+			Y:      l.Preview.Y + line,
+			Button: tea.MouseButtonLeft,
+			Action: tea.MouseActionPress,
+		})
+		if cmd == nil {
+			t.Fatalf("clicking preview line %d produced no message", line)
+		}
+		got, ok := cmd().(PreviewClickMsg)
+		if !ok {
+			t.Fatalf("clicking preview line %d sent %T", line, cmd())
+		}
+		if got.Line != line {
+			t.Errorf("PreviewClickMsg.Line = %d, want %d", got.Line, line)
+		}
+	}
+
+	// The focus is not the point of the click, and must not move with it.
+	before := m.Focus()
+	after, _ := m.Update(tea.MouseMsg{Y: l.Preview.Y, Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress})
+	if after.Focus() != before {
+		t.Errorf("Focus() = %v, want it left at %v", after.Focus(), before)
+	}
+}
+
+// A confirmation window is modal and answered by y or n, and nothing else — the
+// questions worth a window are the ones a stray keypress must not answer.
+func TestConfirmWindowAnswersOnlyToYesAndNo(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "down", "down")
+	before := m.Cursor()
+	m.AskConfirm("trash", Confirm{Question: "Send this session to the trash?", Yes: "remove it", No: "keep it"})
+
+	if m.Focus() != FocusConfirm || m.Confirming() != "trash" {
+		t.Fatalf("Focus = %v, Confirming = %q", m.Focus(), m.Confirming())
+	}
+
+	// The list must not move under a question about the row it was asked of.
+	moved, _ := press(m, "down", "up", "pgdown", "home", "j", "x")
+	if moved.Cursor() != before {
+		t.Errorf("cursor moved to %d under an open window, want %d", moved.Cursor(), before)
+	}
+	if moved.Confirming() != "trash" {
+		t.Error("a stray key closed the window")
+	}
+
+	_, cmd := press(m, "y")
+	if msg, ok := cmd().(ConfirmedMsg); !ok || msg.Label != "trash" {
+		t.Errorf("y gave %T %+v, want ConfirmedMsg{trash}", cmd(), cmd())
+	}
+	for _, key := range []string{"n", "esc", "enter"} {
+		after, cmd := press(m, key)
+		if cmd == nil {
+			t.Fatalf("%s produced no command", key)
+		}
+		if msg, ok := cmd().(DismissedMsg); !ok || msg.Label != "trash" {
+			t.Errorf("%s gave %T, want DismissedMsg", key, cmd())
+		}
+		if after.Confirming() != "" {
+			t.Errorf("%s left the window open", key)
+		}
+		if after.Focus() != FocusList {
+			t.Errorf("after %s the focus is %v, want the band that asked", key, after.Focus())
+		}
+	}
+}
+
+// ^Q still works: a modal you cannot quit out of is a trap.
+func TestCtrlQClosesTheProgramFromAConfirmWindow(t *testing.T) {
+	m := model(10)
+	m.AskConfirm("live", Confirm{Question: "Resume a running session?"})
+	_, cmd := press(m, "ctrl+q")
+	if _, ok := cmd().(QuitMsg); !ok {
+		t.Errorf("cmd() = %T, want QuitMsg", cmd())
+	}
+}
+
+// The window is drawn over the list, centred, with the answers named as the keys
+// that give them — and the rest of the screen still standing around it.
+func TestConfirmWindowIsDrawnOverTheList(t *testing.T) {
+	m := model(30)
+	m.AskConfirm("live", Confirm{
+		Question: "Resume a session that is already running?",
+		Detail:   []string{"Two processes appending to one transcript mangles it."},
+		Yes:      "resume it anyway",
+		No:       "leave it alone",
+	})
+
+	l := m.Layout()
+	lines := strings.Split(m.View(), "\n")
+	body := strings.Join(lines[l.List.Y:l.List.Y+l.List.Height], "\n")
+
+	for _, want := range []string{"already running", "mangles it", "resume it anyway", "leave it alone", "␛"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the window is missing %q:\n%s", want, body)
+		}
+	}
+	if !strings.Contains(body, "╭") || !strings.Contains(body, "╯") {
+		t.Errorf("no border drawn:\n%s", body)
+	}
+	// The chrome around it is untouched: a question is not a new screen.
+	if !strings.Contains(lines[l.Header.Y], "belp") {
+		t.Error("the header went missing")
+	}
+	if !strings.Contains(lines[l.Footer.Y], "open") {
+		t.Error("the footer went missing")
+	}
+	// And rows are still visible above or below it.
+	if !strings.Contains(body, "row") {
+		t.Error("the list was replaced rather than drawn over")
+	}
+	for _, line := range lines {
+		if lipgloss.Width(line) > l.Width {
+			t.Fatalf("line wider than the screen: %q", line)
+		}
 	}
 }
