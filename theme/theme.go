@@ -30,8 +30,8 @@ type Palette struct {
 // the thing you are about to act on and on warning you off the rest.
 func DefaultPalette() Palette {
 	return Palette{
-		Text:    lipgloss.AdaptiveColor{Light: "#1c1c1c", Dark: "#dcdcdc"},
-		Dim:     lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#8a8a8a"},
+		Text:    lipgloss.AdaptiveColor{Light: "#1c1c1c", Dark: "#ffffff"},
+		Dim:     lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#dcdcdc"},
 		Faint:   lipgloss.AdaptiveColor{Light: "#c6c6c6", Dark: "#3a3a3a"},
 		Accent:  lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
 		Key:     lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
