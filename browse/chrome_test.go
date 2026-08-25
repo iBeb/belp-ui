@@ -280,6 +280,7 @@ func TestSearchElidesFromTheLeft(t *testing.T) {
 // to: a caret in an unfocused field points at a place typing would not go.
 func TestSearchDrawsACaretOnlyWhileFocused(t *testing.T) {
 	c := sample()
+	c.Caret = len(c.Query)
 
 	if got := c.Search(40); strings.Contains(got, theme.Caret) {
 		t.Errorf("Search() = %q, want no caret while the list has the focus", got)
@@ -296,19 +297,63 @@ func TestSearchDrawsACaretOnlyWhileFocused(t *testing.T) {
 	}
 }
 
-// An empty field is typed into at the front, so that is where the caret goes,
-// with the placeholder trailing it rather than swallowing it.
-func TestSearchCaretLeadsThePlaceholder(t *testing.T) {
+// The hint says what the field is for, which is answered the moment you are in
+// it — and prose to the right of a cursor reads as something already typed.
+func TestSearchDropsThePlaceholderWhenFocused(t *testing.T) {
 	c := sample()
-	c.Focus = FocusSearch
 	c.Query = ""
 
-	got := c.Search(40)
-	if !strings.Contains(got, "type to filter") {
-		t.Errorf("Search() = %q, want the placeholder", got)
+	if got := c.Search(40); !strings.Contains(got, "type to filter") {
+		t.Errorf("Search() = %q, want the placeholder while unfocused", got)
 	}
-	if strings.Index(got, theme.Caret) > strings.Index(got, "type to filter") {
-		t.Errorf("Search() = %q, want the caret before the placeholder", got)
+
+	c.Focus = FocusSearch
+	got := c.Search(40)
+	if strings.Contains(got, "type to filter") {
+		t.Errorf("Search() = %q, want no placeholder under the cursor", got)
+	}
+	if !strings.Contains(got, theme.Caret) {
+		t.Errorf("Search() = %q, want the cursor alone in the empty field", got)
+	}
+}
+
+// A cursor walked back into a long query is the one thing that has to stay on
+// screen: eliding to the tail would hide the character about to change.
+func TestSearchWindowFollowsTheCaret(t *testing.T) {
+	c := sample()
+	c.Focus = FocusSearch
+	c.Query = "a very long query that will not fit in a narrow field"
+	c.Caret = 0
+
+	got := c.Search(20)
+	if lipgloss.Width(got) > 20 {
+		t.Errorf("Search(20) is %d cells: %q", lipgloss.Width(got), got)
+	}
+	if !strings.Contains(got, "very") {
+		t.Errorf("Search(20) = %q, want the start of the query, where the cursor is", got)
+	}
+	if !strings.Contains(got, "…") {
+		t.Errorf("Search(20) = %q, want an ellipsis for the end that was cut", got)
+	}
+}
+
+// The cell under the cursor is inverted rather than covered: a cursor that hides
+// the character it is on makes you move it away to read what you are changing.
+// Asserted with colour on, since that is the only place inversion exists.
+func TestCaretInvertsTheCharacterItSitsOn(t *testing.T) {
+	restore := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(restore)
+
+	s := theme.Default()
+	// The reverse attribute, folded in with the colour: "\x1b[7;38;2;...m".
+	if got := caretCell(s, 'a'); !strings.Contains(got, "\x1b[7;") || !strings.Contains(got, "a") {
+		t.Errorf("caretCell(a) = %q, want the character kept and inverted", got)
+	}
+	// Past the end of the query there is nothing to invert, so the block stands
+	// in for it.
+	if got := caretCell(s, ' '); !strings.Contains(got, theme.Caret) {
+		t.Errorf("caretCell(space) = %q, want the block", got)
 	}
 }
 
@@ -319,6 +364,7 @@ func TestSearchKeepsTheCaretWhenElided(t *testing.T) {
 	c := sample()
 	c.Focus = FocusSearch
 	c.Query = "a very long query that will not fit in a narrow field"
+	c.Caret = len(c.Query)
 
 	for _, width := range []int{20, 30, 40} {
 		got := c.Search(width)

@@ -97,6 +97,11 @@ type Chrome struct {
 	Focus  Focus
 	Keys   []Key
 
+	// Caret is where the cursor sits in Query, counted in runes from its start.
+	// Query's length means the cell after the last character, which is where a
+	// field that has only been typed into keeps it.
+	Caret int
+
 	// Columns is a header naming what the columns of the list hold, rendered by
 	// the app: it has to line up with the rows, and only the app knows where its
 	// columns start. Empty for a list whose rows are not a table.
@@ -133,6 +138,9 @@ const (
 	groupGap = "  ·  "
 	keyGap   = "   "
 )
+
+// ellipsis says a line was cut rather than simply ending there.
+const ellipsis = "…"
 
 // margin is the cell the filter bar and the preview keep either side of them.
 //
@@ -260,10 +268,18 @@ func (c Chrome) filterBar(labels bool) string {
 	return strings.Join(groups, s.Rule.Render(groupGap))
 }
 
-// Search is the query line.
+// Search is the query line: the magnifier, what has been typed, and the cursor
+// sitting somewhere inside it.
 //
-// Elided from the left when it outgrows the width: you are typing at the end, so
-// the end is the part that has to stay visible.
+// The visible window follows the cursor rather than the end of the text. A
+// cursor walked back to the start of a long query is the one thing that has to
+// stay on screen — eliding to the tail would hide the very character about to
+// change — and an ellipsis marks whichever side was cut.
+//
+// No placeholder while the field has the focus. The hint answers "what is this
+// field for", which is a question you have stopped asking by the time you are
+// typing into it, and prose to the right of a cursor reads as text somebody else
+// left there.
 func (c Chrome) Search(width int) string {
 	s := c.Styles
 	focused := c.Focus == FocusSearch
@@ -273,36 +289,102 @@ func (c Chrome) Search(width int) string {
 		prompt = s.Selected.Render(theme.Magnifier)
 	}
 
-	body := s.Value.Render(c.Query)
-	if c.Query == "" {
-		body = s.Desc.Render(c.Placeholder)
-	}
-
 	room := width - 2 // the magnifier and the space after it
-	if focused {
-		room-- // the caret
-	}
-	if room > 0 && lipgloss.Width(body) > room {
-		runes := []rune(c.Query)
-		if n := len(runes) - room + 1; n > 0 && n < len(runes) {
-			body = s.Desc.Render("…") + s.Value.Render(string(runes[n:]))
-		}
+	if room < 1 {
+		return fit(prompt, width)
 	}
 
-	// The caret goes where the next character will land: after the query, or at
-	// the front of the field while it is empty, with the placeholder trailing
-	// it. Only while the field has the focus — a caret in a band the keyboard is
-	// not talking to claims a cursor that is in fact somewhere else, and there
-	// is only ever one.
-	if focused {
-		caret := s.Cursor.Render(theme.Caret)
-		if c.Query == "" {
-			body = caret + body
-		} else {
-			body += caret
-		}
+	if !focused && c.Query == "" {
+		return fit(prompt+" "+s.Desc.Render(c.Placeholder), width)
 	}
-	return fit(prompt+" "+body, width)
+
+	// Focused, the field carries one cell more than it has characters: the one
+	// the cursor sits on when it is past the end of the query, which is where it
+	// spends most of its life.
+	cells := []rune(c.Query)
+	caret := -1
+	if focused {
+		cells = append(cells, ' ')
+		caret = clamp(c.Caret, 0, len(cells)-1)
+	}
+
+	// The window has to hold the cursor when there is one. With none, it holds
+	// the end: an unfocused field is showing what the query is, and a query is
+	// most recently true at its end.
+	follow := caret
+	if !focused {
+		follow = len(cells) - 1
+	}
+	start, end, cutLeft, cutRight := window(len(cells), follow, room)
+
+	var b strings.Builder
+	if cutLeft {
+		b.WriteString(s.Desc.Render(ellipsis))
+	}
+	for i := start; i < end; i++ {
+		if i == caret {
+			b.WriteString(caretCell(s, cells[i]))
+			continue
+		}
+		b.WriteString(s.Value.Render(string(cells[i])))
+	}
+	if cutRight {
+		b.WriteString(s.Desc.Render(ellipsis))
+	}
+	return fit(prompt+" "+b.String(), width)
+}
+
+// caretCell draws the cursor over one cell of the field.
+//
+// The character under it is inverted rather than covered: a cursor that hides
+// what it is on makes you move it away to read what you are about to change.
+// Where there is no character — the cell past the end of the query — there is
+// nothing to invert and the block is drawn outright.
+func caretCell(s theme.Styles, r rune) string {
+	if r == ' ' {
+		return s.Cursor.Render(theme.Caret)
+	}
+	return s.Cursor.Reverse(true).Render(string(r))
+}
+
+// window is the run of cells to draw: which slice of n fits in room, chosen so
+// that follow falls inside it, and whether each end had to be cut.
+//
+// The ellipses cost a cell each, and giving one up moves the window, which can
+// change whether the other end is cut at all — so it settles rather than
+// calculates. Three passes at the outside: each one can only take cells away.
+func window(n, follow, room int) (start, end int, cutLeft, cutRight bool) {
+	if n <= room {
+		return 0, n, false, false
+	}
+	for {
+		room := room
+		if cutLeft {
+			room--
+		}
+		if cutRight {
+			room--
+		}
+		if room < 1 {
+			// Narrower than its own ellipses. The cursor is what the field is
+			// for, so the cursor is what the one cell shows.
+			return max(0, follow), max(0, follow) + 1, false, false
+		}
+		start = 0
+		if follow >= room {
+			start = follow - room + 1
+		}
+		if start+room > n {
+			start = n - room
+		}
+		end = start + room
+
+		left, right := start > 0, end < n
+		if left == cutLeft && right == cutRight {
+			return start, end, cutLeft, cutRight
+		}
+		cutLeft, cutRight = left, right
+	}
 }
 
 // SearchBox is the field inside its border: exactly searchRows lines, each
@@ -377,7 +459,7 @@ func (c Chrome) Ask(width int) string {
 	if room > 0 && lipgloss.Width(text) > room {
 		runes := []rune(text)
 		if n := len(runes) - room + 1; n > 0 && n < len(runes) {
-			text = "…" + string(runes[n:])
+			text = ellipsis + string(runes[n:])
 		}
 	}
 	return fit(label+s.Value.Render(text)+s.Cursor.Render(theme.Caret), width)
@@ -472,9 +554,9 @@ func elide(line string, width int) string {
 		return line
 	}
 	if width == 1 {
-		return "…"
+		return ellipsis
 	}
-	return lipgloss.NewStyle().MaxWidth(width-1).Render(line) + "…"
+	return lipgloss.NewStyle().MaxWidth(width-1).Render(line) + ellipsis
 }
 
 // fitAll takes the caller's lines to exactly n of them, each within width.

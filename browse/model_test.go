@@ -160,7 +160,7 @@ func TestBackspaceAndWordDeleteEditTheQuery(t *testing.T) {
 		t.Errorf("Query() = %q, want %q", m.Query(), "ge")
 	}
 
-	m.chrome.Query = "geo package "
+	m.chrome.Query, m.chrome.Caret = "geo package ", len("geo package ")
 	m, _ = press(m, "ctrl+w")
 	if m.Query() != "geo " {
 		t.Errorf("Query() = %q, want %q", m.Query(), "geo ")
@@ -168,6 +168,85 @@ func TestBackspaceAndWordDeleteEditTheQuery(t *testing.T) {
 	m, _ = press(m, "ctrl+w")
 	if m.Query() != "" {
 		t.Errorf("Query() = %q, want it emptied", m.Query())
+	}
+}
+
+// A cursor that only ever sits at the end is an append point wearing a cursor's
+// clothes. Left and right are what make it one.
+func TestArrowsMoveTheCaretInTheSearchField(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up") // search
+	m.chrome.Query, m.chrome.Caret = "", 0
+	m, _ = press(m, "g", "e", "o")
+
+	m, _ = press(m, "left", "left")
+	if m.chrome.Caret != 1 {
+		t.Errorf("caret = %d after two lefts from the end of %q, want 1", m.chrome.Caret, "geo")
+	}
+	m, _ = press(m, "right")
+	if m.chrome.Caret != 2 {
+		t.Errorf("caret = %d after a right, want 2", m.chrome.Caret)
+	}
+
+	// Both ends stop rather than wrap: a cursor that reappears at the far end
+	// of the text has lost the one thing it was saying.
+	m, _ = press(m, "left", "left", "left", "left")
+	if m.chrome.Caret != 0 {
+		t.Errorf("caret = %d against the left end, want 0", m.chrome.Caret)
+	}
+	m, _ = press(m, "right", "right", "right", "right", "right")
+	if m.chrome.Caret != 3 {
+		t.Errorf("caret = %d against the right end of %q, want 3", m.chrome.Caret, m.Query())
+	}
+}
+
+// Where the cursor is, is where the typing goes — and where a backspace bites.
+func TestEditingHappensAtTheCaret(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up") // search
+	m.chrome.Query, m.chrome.Caret = "", 0
+	m, _ = press(m, "g", "e", "o")
+
+	m, _ = press(m, "left", "x")
+	if m.Query() != "gexo" {
+		t.Errorf("Query() = %q, want %q: typing lands at the cursor", m.Query(), "gexo")
+	}
+	if m.chrome.Caret != 3 {
+		t.Errorf("caret = %d after typing, want it after what was typed", m.chrome.Caret)
+	}
+
+	// Backspace takes the character before the cursor, not the one under it:
+	// it deletes what you just typed, not what you just walked onto.
+	m, _ = press(m, "backspace")
+	if m.Query() != "geo" {
+		t.Errorf("Query() = %q, want %q", m.Query(), "geo")
+	}
+	m, _ = press(m, "home", "backspace")
+	if m.Query() != "geo" {
+		t.Errorf("Query() = %q, want the query untouched at the left end", m.Query())
+	}
+	m, _ = press(m, "end", "backspace")
+	if m.Query() != "ge" {
+		t.Errorf("Query() = %q, want %q after end then backspace", m.Query(), "ge")
+	}
+}
+
+// The same two keys walk the chips. The band decides which, and the other must
+// not move underneath it.
+func TestArrowsInTheFieldLeaveTheChipsAlone(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up", "up") // filters
+	m, _ = press(m, "right")
+	chip := m.option
+
+	m, _ = press(m, "down") // search
+	m.chrome.Query, m.chrome.Caret = "geo", 3
+	m, _ = press(m, "left", "left")
+	if m.option != chip {
+		t.Errorf("chip cursor moved to %d while typing in the field, want %d", m.option, chip)
+	}
+	if m.chrome.Caret != 1 {
+		t.Errorf("caret = %d, want 1", m.chrome.Caret)
 	}
 }
 

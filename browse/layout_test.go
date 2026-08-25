@@ -136,6 +136,45 @@ func TestComputeShowsAPreviewOnAnOrdinaryTerminal(t *testing.T) {
 	}
 }
 
+// The window settles rather than calculates: giving a cell to one ellipsis moves
+// the window, which can decide whether the other end is cut at all.
+func TestWindowHoldsWhatItFollows(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		n, follow, room   int
+		start, end        int
+		cutLeft, cutRight bool
+	}{
+		{"it all fits", 5, 4, 10, 0, 5, false, false},
+		{"cursor at the end", 20, 19, 10, 11, 20, true, false},
+		{"cursor at the start", 20, 0, 10, 0, 9, false, true},
+		{"cursor in the middle", 20, 10, 10, 3, 11, true, true},
+		{"narrower than its ellipses", 20, 7, 2, 7, 8, false, false},
+	} {
+		start, end, left, right := window(tc.n, tc.follow, tc.room)
+		if start != tc.start || end != tc.end || left != tc.cutLeft || right != tc.cutRight {
+			t.Errorf("%s: window(%d, %d, %d) = %d..%d cut(%v, %v), want %d..%d cut(%v, %v)",
+				tc.name, tc.n, tc.follow, tc.room, start, end, left, right,
+				tc.start, tc.end, tc.cutLeft, tc.cutRight)
+		}
+		if tc.follow < start || tc.follow >= end {
+			t.Errorf("%s: window %d..%d does not hold %d", tc.name, start, end, tc.follow)
+		}
+		// What is drawn is the slice plus an ellipsis for each end that was cut,
+		// and that has to be exactly the room there was.
+		cells := end - start
+		if left {
+			cells++
+		}
+		if right {
+			cells++
+		}
+		if cells > tc.room {
+			t.Errorf("%s: %d cell(s) drawn in room for %d", tc.name, cells, tc.room)
+		}
+	}
+}
+
 // One worked example, so the arithmetic is legible and not only asserted about.
 // 30 rows: 6 of chrome at the top — the search box is three of them — a 10-row
 // preview (a third of 30) with its rule, the footer on the last row, and the list

@@ -109,7 +109,11 @@ type Model struct {
 }
 
 // New builds a model that draws with this chrome.
+//
+// The cursor starts after whatever query the app pre-filled: a field handed to
+// you with text already in it is one you are meant to add to, not overwrite.
 func New(c Chrome) Model {
+	c.Caret = len([]rune(c.Query))
 	return Model{chrome: c}
 }
 
@@ -343,13 +347,22 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.cursor++
 		}
 
+	// Along the chips on the filter bar, and through the text in the search
+	// field. Same keys, because in both bands they mean "the next thing to the
+	// left", and the band already says which thing that is.
 	case "left":
-		if m.chrome.Focus == FocusFilters {
+		switch m.chrome.Focus {
+		case FocusFilters:
 			m.moveChip(-1)
+		case FocusSearch:
+			m.moveCaret(-1)
 		}
 	case "right":
-		if m.chrome.Focus == FocusFilters {
+		switch m.chrome.Focus {
+		case FocusFilters:
 			m.moveChip(1)
+		case FocusSearch:
+			m.moveCaret(1)
 		}
 
 	case "enter", " ":
@@ -359,7 +372,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, func() tea.Msg { return FiltersChangedMsg{} }
 		case FocusSearch:
 			if msg.String() == " " {
-				m.chrome.Query += " "
+				m.insert(" ")
 				break
 			}
 			// Down into the list, which is what Enter means in a search field —
@@ -384,27 +397,34 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.cursor = min(m.count-1, m.cursor+rows)
 		}
 	case "home":
-		if m.chrome.Focus == FocusList {
+		switch m.chrome.Focus {
+		case FocusList:
 			m.cursor = 0
+		case FocusSearch:
+			m.chrome.Caret = 0
 		}
 	case "end":
-		if m.chrome.Focus == FocusList {
+		switch m.chrome.Focus {
+		case FocusList:
 			m.cursor = max(0, m.count-1)
+		case FocusSearch:
+			m.chrome.Caret = len([]rune(m.chrome.Query))
 		}
 
 	// ^U clears from anywhere, because it is advertised in the footer and a key
 	// in the footer that only works in one band is a key that looks broken.
 	case "ctrl+u":
-		m.chrome.Query = ""
+		m.chrome.Query, m.chrome.Caret = "", 0
 
 	case "backspace":
-		if m.chrome.Focus == FocusSearch && m.chrome.Query != "" {
-			r := []rune(m.chrome.Query)
-			m.chrome.Query = string(r[:len(r)-1])
+		if m.chrome.Focus == FocusSearch {
+			m.backspace()
 		}
 	case "ctrl+w":
 		if m.chrome.Focus == FocusSearch {
-			m.chrome.Query = dropWord(m.chrome.Query)
+			head, tail := m.split()
+			m.chrome.Query = dropWord(head) + tail
+			m.chrome.Caret = len([]rune(dropWord(head)))
 		}
 
 	default:
@@ -412,7 +432,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Otherwise every letter would be both a search term and a shortcut,
 		// and the list could never have single-key bindings of its own.
 		if m.chrome.Focus == FocusSearch && msg.Type == tea.KeyRunes {
-			m.chrome.Query += string(msg.Runes)
+			m.insert(string(msg.Runes))
 		}
 	}
 
@@ -646,6 +666,44 @@ func (m Model) previewLines(l Layout) []string {
 		return nil
 	}
 	return m.Preview(m.cursor, l.Width, l.Preview.Height)
+}
+
+// split is the query either side of the cursor.
+//
+// Every edit is expressed as one of these two halves changing, which is what
+// keeps insert and delete from each needing their own idea of where the cursor
+// is and what it means to be at the end.
+func (m Model) split() (head, tail string) {
+	r := []rune(m.chrome.Query)
+	at := clamp(m.chrome.Caret, 0, len(r))
+	return string(r[:at]), string(r[at:])
+}
+
+// insert puts text in at the cursor and leaves the cursor after it.
+func (m *Model) insert(text string) {
+	head, tail := m.split()
+	m.chrome.Query = head + text + tail
+	m.chrome.Caret = len([]rune(head)) + len([]rune(text))
+}
+
+// backspace removes the character before the cursor, which is the one the
+// cursor is not sitting on: it deletes what you have just typed, not what you
+// have just walked onto.
+func (m *Model) backspace() {
+	head, tail := m.split()
+	r := []rune(head)
+	if len(r) == 0 {
+		return
+	}
+	m.chrome.Query = string(r[:len(r)-1]) + tail
+	m.chrome.Caret = len(r) - 1
+}
+
+// moveCaret walks the cursor along the query, stopping at either end rather
+// than wrapping: a cursor that reappears at the far end of the text has lost the
+// one thing it was telling you.
+func (m *Model) moveCaret(delta int) {
+	m.chrome.Caret = clamp(m.chrome.Caret+delta, 0, len([]rune(m.chrome.Query)))
 }
 
 // dropWord removes the last word of a query, and the trailing space with it.
