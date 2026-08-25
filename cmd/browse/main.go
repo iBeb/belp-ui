@@ -84,7 +84,8 @@ func chrome(s theme.Styles, focus string) browse.Chrome {
 		c.Groups[0].Options[2].Focused = true
 	case "prompt":
 		c.Focus = browse.FocusPrompt
-		c.Prompt = browse.Prompt{Label: "title: ", Text: "site ABC-8714_Consolidate"}
+		text := "site ABC-8714_Consolidate"
+		c.Prompt = browse.Prompt{Label: "title: ", Text: text, Caret: len(text)}
 	}
 	return c
 }

@@ -158,7 +158,7 @@ func (m *Model) Ask(label, initial string) {
 		m.returnTo = m.chrome.Focus
 	}
 	m.chrome.Focus = FocusPrompt
-	m.chrome.Prompt = Prompt{Label: label, Text: initial}
+	m.chrome.Prompt = Prompt{Label: label, Text: initial, Caret: len([]rune(initial))}
 }
 
 // AskConfirm opens a confirmation window over the list, and answers it with a
@@ -355,14 +355,14 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case FocusFilters:
 			m.moveChip(-1)
 		case FocusSearch:
-			m.moveCaret(-1)
+			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, -1)
 		}
 	case "right":
 		switch m.chrome.Focus {
 		case FocusFilters:
 			m.moveChip(1)
 		case FocusSearch:
-			m.moveCaret(1)
+			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, 1)
 		}
 
 	case "enter", " ":
@@ -372,7 +372,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, func() tea.Msg { return FiltersChangedMsg{} }
 		case FocusSearch:
 			if msg.String() == " " {
-				m.insert(" ")
+				m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, " ")
 				break
 			}
 			// Down into the list, which is what Enter means in a search field —
@@ -418,13 +418,11 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "backspace":
 		if m.chrome.Focus == FocusSearch {
-			m.backspace()
+			m.chrome.Query, m.chrome.Caret = backspaceAt(m.chrome.Query, m.chrome.Caret)
 		}
 	case "ctrl+w":
 		if m.chrome.Focus == FocusSearch {
-			head, tail := m.split()
-			m.chrome.Query = dropWord(head) + tail
-			m.chrome.Caret = len([]rune(dropWord(head)))
+			m.chrome.Query, m.chrome.Caret = dropWordAt(m.chrome.Query, m.chrome.Caret)
 		}
 
 	default:
@@ -432,7 +430,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Otherwise every letter would be both a search term and a shortcut,
 		// and the list could never have single-key bindings of its own.
 		if m.chrome.Focus == FocusSearch && msg.Type == tea.KeyRunes {
-			m.insert(string(msg.Runes))
+			m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, string(msg.Runes))
 		}
 	}
 
@@ -462,11 +460,14 @@ func (m Model) confirm(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// prompt is the keyboard while a question is open.
+// prompt is the keyboard while a typed question is open.
 //
-// The same editing keys as the search field, deliberately: one line editor to
-// learn, and ^U clearing the answer rather than the query it is drawn over.
+// The same line editor as the search field, down to the arrows walking the
+// cursor through the answer: one editor to learn, and ^U clearing the answer
+// rather than the query it is drawn over.
 func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
+	text, caret := m.chrome.Prompt.Text, m.chrome.Prompt.Caret
+
 	switch msg.String() {
 	case "ctrl+q", "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
@@ -480,26 +481,34 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		label, _ := m.close()
 		return m, func() tea.Msg { return CancelledMsg{Label: label} }
 
+	case "left":
+		caret = moveAt(text, caret, -1)
+	case "right":
+		caret = moveAt(text, caret, 1)
+	case "home":
+		caret = 0
+	case "end":
+		caret = len([]rune(text))
+
 	case "ctrl+u":
-		m.chrome.Prompt.Text = ""
+		text, caret = "", 0
 	case "ctrl+w":
-		m.chrome.Prompt.Text = dropWord(m.chrome.Prompt.Text)
+		text, caret = dropWordAt(text, caret)
 	case "backspace":
-		if r := []rune(m.chrome.Prompt.Text); len(r) > 0 {
-			m.chrome.Prompt.Text = string(r[:len(r)-1])
-		}
+		text, caret = backspaceAt(text, caret)
 
 	default:
 		// Space arrives as a rune here rather than as the list's Enter-alike:
 		// inside an answer it is a character like any other.
-		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
-			if msg.Type == tea.KeySpace {
-				m.chrome.Prompt.Text += " "
-				break
-			}
-			m.chrome.Prompt.Text += string(msg.Runes)
+		switch msg.Type {
+		case tea.KeySpace:
+			text, caret = insertAt(text, caret, " ")
+		case tea.KeyRunes:
+			text, caret = insertAt(text, caret, string(msg.Runes))
 		}
 	}
+
+	m.chrome.Prompt.Text, m.chrome.Prompt.Caret = text, caret
 	return m, nil
 }
 
@@ -668,42 +677,49 @@ func (m Model) previewLines(l Layout) []string {
 	return m.Preview(m.cursor, l.Width, l.Preview.Height)
 }
 
-// split is the query either side of the cursor.
+// A line editor, expressed as functions over the text and where the cursor is in
+// it, so the search field and the answer in a window are edited by the same code
+// rather than by two copies that drift.
 //
-// Every edit is expressed as one of these two halves changing, which is what
-// keeps insert and delete from each needing their own idea of where the cursor
-// is and what it means to be at the end.
-func (m Model) split() (head, tail string) {
-	r := []rune(m.chrome.Query)
-	at := clamp(m.chrome.Caret, 0, len(r))
+// Every edit is one of the two halves either side of the cursor changing, which
+// is what keeps insert and delete from each needing their own idea of where the
+// cursor is and what being at the end means.
+func split(text string, caret int) (head, tail string) {
+	r := []rune(text)
+	at := clamp(caret, 0, len(r))
 	return string(r[:at]), string(r[at:])
 }
 
-// insert puts text in at the cursor and leaves the cursor after it.
-func (m *Model) insert(text string) {
-	head, tail := m.split()
-	m.chrome.Query = head + text + tail
-	m.chrome.Caret = len([]rune(head)) + len([]rune(text))
+// insertAt puts s in at the cursor and leaves the cursor after it.
+func insertAt(text string, caret int, s string) (string, int) {
+	head, tail := split(text, caret)
+	return head + s + tail, len([]rune(head)) + len([]rune(s))
 }
 
-// backspace removes the character before the cursor, which is the one the
+// backspaceAt removes the character before the cursor, which is the one the
 // cursor is not sitting on: it deletes what you have just typed, not what you
 // have just walked onto.
-func (m *Model) backspace() {
-	head, tail := m.split()
+func backspaceAt(text string, caret int) (string, int) {
+	head, tail := split(text, caret)
 	r := []rune(head)
 	if len(r) == 0 {
-		return
+		return text, caret
 	}
-	m.chrome.Query = string(r[:len(r)-1]) + tail
-	m.chrome.Caret = len(r) - 1
+	return string(r[:len(r)-1]) + tail, len(r) - 1
 }
 
-// moveCaret walks the cursor along the query, stopping at either end rather
-// than wrapping: a cursor that reappears at the far end of the text has lost the
-// one thing it was telling you.
-func (m *Model) moveCaret(delta int) {
-	m.chrome.Caret = clamp(m.chrome.Caret+delta, 0, len([]rune(m.chrome.Query)))
+// dropWordAt removes the word before the cursor and keeps what follows it.
+func dropWordAt(text string, caret int) (string, int) {
+	head, tail := split(text, caret)
+	head = dropWord(head)
+	return head + tail, len([]rune(head))
+}
+
+// moveAt walks the cursor along the text, stopping at either end rather than
+// wrapping: a cursor that reappears at the far end has lost the one thing it was
+// telling you.
+func moveAt(text string, caret, delta int) int {
+	return clamp(caret+delta, 0, len([]rune(text)))
 }
 
 // dropWord removes the last word of a query, and the trailing space with it.

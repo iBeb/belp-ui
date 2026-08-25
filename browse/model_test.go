@@ -900,27 +900,59 @@ func TestEscAbandonsTheQuestionAndCtrlQStillQuits(t *testing.T) {
 	}
 }
 
-// The footer is the one row a question can borrow: while it is open, none of the
-// key hints it replaces apply anyway.
-func TestTheQuestionTakesTheFooterRow(t *testing.T) {
+// A question is drawn over the list, not into the footer: the keys go on saying
+// what they do, and the list stays visible around the window because the question
+// is about the row still highlighted underneath.
+func TestTheQuestionIsAWindowOverTheList(t *testing.T) {
 	m := model(10)
 	l := m.Layout()
 
 	m.Ask("title: ", "SV PR#853")
-	lines := strings.Split(m.View(), "\n")
-	footer := lines[l.Footer.Y]
-	if !strings.Contains(footer, "title:") || !strings.Contains(footer, "SV PR#853") {
-		t.Errorf("footer = %q, want the question and the answer so far", footer)
+	view := m.View()
+	lines := strings.Split(view, "\n")
+
+	if footer := lines[l.Footer.Y]; footer != "" {
+		t.Errorf("footer = %q, want it blank: ↵ is answering the question", footer)
 	}
-	for _, hint := range []string{"open", "review", "quit"} {
-		if strings.Contains(footer, hint) {
-			t.Errorf("footer = %q, want the key hints replaced, not shared with %q", footer, hint)
-		}
+	if !strings.Contains(view, "SV PR#853") || !strings.Contains(view, "title") {
+		t.Error("the question and the answer so far are not on the screen")
+	}
+	if !strings.Contains(view, "╭") {
+		t.Error("the question is not in a window")
+	}
+	// The list is still there around it: a question is not a new screen.
+	if !strings.Contains(view, "row0") {
+		t.Error("the list is not drawn under the question")
+	}
+}
+
+// One editor, both fields: the arrows walk the cursor through an answer exactly
+// as they do through a query.
+func TestTheAnswerHasAMovableCursor(t *testing.T) {
+	m := model(10)
+	m.Ask("title: ", "geo")
+	if m.chrome.Prompt.Caret != 3 {
+		t.Errorf("caret = %d on opening, want it after the text it was given", m.chrome.Prompt.Caret)
 	}
 
-	// And the rest of the screen is untouched: a question is not a new screen.
-	if got := lines[l.List.Y]; !strings.Contains(got, "row0") {
-		t.Errorf("first list row = %q, want the list still drawn under the question", got)
+	m, _ = press(m, "left", "x")
+	if m.chrome.Prompt.Text != "gexo" {
+		t.Errorf("Text = %q, want %q: typing lands at the cursor", m.chrome.Prompt.Text, "gexo")
+	}
+	m, _ = press(m, "home", "backspace")
+	if m.chrome.Prompt.Text != "gexo" {
+		t.Errorf("Text = %q, want it untouched at the left end", m.chrome.Prompt.Text)
+	}
+	m, _ = press(m, "end", "backspace")
+	if m.chrome.Prompt.Text != "gex" {
+		t.Errorf("Text = %q, want %q", m.chrome.Prompt.Text, "gex")
+	}
+
+	// And the list underneath does not move while it is open.
+	before := m.Cursor()
+	m, _ = press(m, "down", "down")
+	if m.Cursor() != before {
+		t.Errorf("cursor moved to %d with a question open, want %d", m.Cursor(), before)
 	}
 }
 
@@ -1050,12 +1082,15 @@ func TestConfirmWindowIsDrawnOverTheList(t *testing.T) {
 	if !strings.Contains(body, "╭") || !strings.Contains(body, "╯") {
 		t.Errorf("no border drawn:\n%s", body)
 	}
-	// The chrome around it is untouched: a question is not a new screen.
+	// The chrome around it is untouched: a question is not a new screen. The
+	// footer is the exception — its hints are the list's, and none of them apply
+	// while the window owns the keyboard, so the row goes blank rather than
+	// claiming ↵ still opens a row.
 	if !strings.Contains(lines[l.Header.Y], "belp") {
 		t.Error("the header went missing")
 	}
-	if !strings.Contains(lines[l.Footer.Y], "open") {
-		t.Error("the footer went missing")
+	if got := lines[l.Footer.Y]; got != "" {
+		t.Errorf("footer = %q, want it blank while the window is open", got)
 	}
 	// And rows are still visible above or below it.
 	if !strings.Contains(body, "row") {

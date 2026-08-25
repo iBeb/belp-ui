@@ -377,19 +377,64 @@ func TestSearchKeepsTheCaretWhenElided(t *testing.T) {
 	}
 }
 
-// The question in the footer is the same line editor as the search field, so it
-// marks where you are typing the same way.
-func TestAskDrawsTheSameCaret(t *testing.T) {
+// A typed question goes in the same frame as a yes-or-no one, with the same
+// cursor the search field has: one interruption, one shape, one editor.
+func TestWindowDrawsATypedQuestion(t *testing.T) {
 	c := sample()
 	c.Focus = FocusPrompt
-	c.Prompt = Prompt{Label: "title: ", Text: "site ABC-8714"}
+	c.Prompt = Prompt{Label: "title: ", Text: "site ABC-8714", Caret: len("site ABC-8714")}
 
-	got := c.Ask(40)
-	if !strings.Contains(got, theme.Caret) {
-		t.Errorf("Ask() = %q, want a caret", got)
+	box := c.Window(40)
+	if len(box) < 5 {
+		t.Fatalf("Window() = %d line(s), want a bordered box with the answer in it", len(box))
 	}
-	if strings.Index(got, theme.Caret) < strings.Index(got, "4178") {
-		t.Errorf("Ask() = %q, want the caret after the answer", got)
+	got := strings.Join(box, "\n")
+
+	// The label loses the punctuation it had for sitting inline in a footer.
+	if !strings.Contains(got, "title") || strings.Contains(got, "title:") {
+		t.Errorf("Window() = %q, want the label as a heading without its colon", got)
+	}
+	for _, want := range []string{"site ABC-8714", theme.Caret, "confirm", "cancel"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Window() = %q, want it to contain %q", got, want)
+		}
+	}
+	for i, line := range box {
+		if w := lipgloss.Width(line); w != lipgloss.Width(box[0]) {
+			t.Errorf("line %d is %d cells, want %d: the box must be square",
+				i, w, lipgloss.Width(box[0]))
+		}
+	}
+}
+
+// While a question is open the footer says nothing rather than something untrue:
+// its hints are the list's, and ↵ is answering the question.
+func TestFooterGoesQuietWhileAQuestionIsOpen(t *testing.T) {
+	c := sample()
+	c.Focus = FocusPrompt
+	c.Prompt = Prompt{Label: "title: ", Text: "a title"}
+
+	l := Compute(80, 24, false)
+	lines := strings.Split(c.Render(l, []string{"one", "two"}, nil), "\n")
+	if got := lines[l.Footer.Y]; got != "" {
+		t.Errorf("footer = %q, want it blank while a question is open", got)
+	}
+
+	view := strings.Join(lines, "\n")
+	if !strings.Contains(view, "a title") {
+		t.Error("the answer being typed is nowhere on the screen")
+	}
+	// The window carries the keys that do apply.
+	for _, want := range []string{"confirm", "cancel"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("window does not say %q", want)
+		}
+	}
+
+	c.Focus = FocusList
+	lines = strings.Split(c.Render(l, []string{"one", "two"}, nil), "\n")
+	if !strings.Contains(lines[l.Footer.Y], "open") {
+		t.Errorf("footer = %q, want the hints back with no question open", lines[l.Footer.Y])
 	}
 }
 
