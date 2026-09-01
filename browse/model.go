@@ -314,30 +314,12 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	// q from the list, the way every other full-screen program in a terminal
-	// quits. Only from the list: in the search field it is a letter, and on the
-	// filter bar it is nothing.
-	//
-	// It exists because ^Q does not arrive. A multiplexer binds it to quit the
-	// whole session and takes it before an app sees it, so the key this used to
-	// advertise killed the wrong thing — and every app in this family runs inside
-	// one. ^C still arrives, since a multiplexer only claims that inside its own
-	// modes.
-	case "q":
-		switch m.chrome.Focus {
-		case FocusList:
-			return m, func() tea.Msg { return QuitMsg{} }
-		case FocusSearch:
-			m.chrome.Query += "q"
-		}
-
-	// ^C and ^Q, never Esc. Esc is too useful inside an app — backing out of a
+	// ^Q and ^C, never Esc. Esc is too useful inside an app — backing out of a
 	// field, cancelling an overlay — to spend on the one action you cannot undo,
 	// and it is one stray keypress away at all times.
 	//
 	// ^Q is XON, which a cooked terminal eats before an app sees it. Bubbletea
-	// puts the terminal in raw mode, which clears IXON, so it arrives — where a
-	// multiplexer has not taken it first.
+	// puts the terminal in raw mode, which clears IXON, so it arrives.
 	case "ctrl+q", "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
