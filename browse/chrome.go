@@ -249,7 +249,8 @@ func (c Chrome) filterBar(labels bool) string {
 	for _, g := range c.Groups {
 		var b strings.Builder
 		if labels && g.Label != "" {
-			b.WriteString(s.Label.Render(g.Label) + " ")
+			// Bold: dimmed alone, the name of a filter read as one of its values.
+			b.WriteString(s.Heading.Render(g.Label) + " ")
 		}
 		for i, o := range g.Options {
 			if i > 0 {
