@@ -323,11 +323,21 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "ctrl+q", "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
+	// Backing out of an overlay is exactly what Esc is kept for. It closes the
+	// menu and nothing else: the selection stands, since every toggle already
+	// took effect as it was made.
+	case "esc":
+		if m.chrome.Focus == FocusMenu {
+			m.chrome.Focus = FocusFilters
+		}
+
 	// The bands are one selection model, not three: the search field is the row
 	// above the first row and the filter bar the row above that, so ↑ and ↓ are
 	// the only thing to learn.
 	case "up", "ctrl+p":
 		switch {
+		case m.chrome.Focus == FocusMenu:
+			m.moveInMenu(-1)
 		case m.chrome.Focus == FocusFilters:
 			// Already at the top.
 		case m.chrome.Focus == FocusSearch:
@@ -339,6 +349,8 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	case "down", "ctrl+n":
 		switch {
+		case m.chrome.Focus == FocusMenu:
+			m.moveInMenu(1)
 		case m.chrome.Focus == FocusFilters:
 			m.chrome.Focus = FocusSearch
 		case m.chrome.Focus == FocusSearch:
@@ -368,8 +380,21 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "enter", " ":
 		switch m.chrome.Focus {
 		case FocusFilters:
+			if m.onMenu() {
+				m.chrome.Focus = FocusMenu
+				m.option = 0
+				break
+			}
 			m.toggleChip()
 			return m, func() tea.Msg { return FiltersChangedMsg{} }
+		case FocusMenu:
+			if msg.String() == " " {
+				m.toggleChip()
+				return m, func() tea.Msg { return FiltersChangedMsg{} }
+			}
+			// Enter closes: the toggling is done with space, and a list you
+			// cannot leave with the key that opened it is a trap.
+			m.chrome.Focus = FocusFilters
 		case FocusSearch:
 			if msg.String() == " " {
 				m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, " ")
@@ -530,6 +555,23 @@ func (m *Model) moveChip(delta int) {
 	m.group, m.option = flat[at].group, flat[at].option
 }
 
+// moveInMenu walks the open menu's members. It stops at either end rather than
+// wrapping: a list that jumps from the last name to the first reads as having
+// moved somewhere else entirely.
+func (m *Model) moveInMenu(delta int) {
+	if m.group >= len(m.chrome.Groups) {
+		return
+	}
+	if n := len(m.chrome.Groups[m.group].Options); n > 0 {
+		m.option = clamp(m.option+delta, 0, n-1)
+	}
+}
+
+// onMenu reports whether the bar's cursor is sitting on a menu's chip.
+func (m Model) onMenu() bool {
+	return m.group < len(m.chrome.Groups) && m.chrome.Groups[m.group].Menu
+}
+
 // toggleChip flips the chip under the cursor.
 //
 // Copy on write, never in place: a Model is passed around by value, so several
@@ -596,6 +638,12 @@ type chipAt struct{ group, option int }
 func (m Model) flatChips() []chipAt {
 	var out []chipAt
 	for g, group := range m.chrome.Groups {
+		// A menu is one stop whatever it holds: walking the bar should not walk
+		// forty colleagues, which is the whole reason it is a menu.
+		if group.Menu {
+			out = append(out, chipAt{g, m.option})
+			continue
+		}
 		for o := range group.Options {
 			out = append(out, chipAt{g, o})
 		}
@@ -636,7 +684,9 @@ func (m Model) View() string {
 	// The chip the cursor is on is a property of the model, stamped onto a copy
 	// of the groups at draw time. Keeping it on the options themselves would
 	// mean two places that have to agree about where the cursor is.
-	if c.Focus == FocusFilters {
+	// FocusMenu needs them too: the open list draws its own cursor, and the
+	// group it belongs to is the one the bar's cursor is on.
+	if c.Focus == FocusFilters || c.Focus == FocusMenu {
 		c.Groups = m.groupsWithCursor()
 	}
 
@@ -647,6 +697,9 @@ func (m Model) groupsWithCursor() []Group {
 	groups := make([]Group, len(m.chrome.Groups))
 	for g, group := range m.chrome.Groups {
 		groups[g] = group
+		// A menu holds the cursor as a group: its chip is one, whatever is
+		// inside, and inside is where m.option is pointing once it is open.
+		groups[g].Focused = group.Menu && g == m.group
 		groups[g].Options = make([]Option, len(group.Options))
 		for o, opt := range group.Options {
 			opt.Focused = g == m.group && o == m.option

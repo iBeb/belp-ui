@@ -1,6 +1,7 @@
 package browse
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,6 +32,10 @@ const (
 	// one more hint, and the row it is about is still sitting there under the
 	// cursor as though nothing were pending.
 	FocusConfirm
+
+	// FocusMenu is an open Menu group. Modal like the others: the arrows are
+	// walking the list of members, so nothing underneath may move.
+	FocusMenu
 )
 
 // Option is one filter chip.
@@ -61,6 +66,19 @@ type Group struct {
 	// the chip that is already on leaves it on: there is no useful state where
 	// an exclusive group has no answer.
 	Exclusive bool
+
+	// Menu collapses the group to a single chip that opens a list.
+	//
+	// For a set whose members are data rather than design: colleagues, projects,
+	// repositories. Laid out as chips they would push every group after them off
+	// a narrow terminal, and the bar would be a different width for each person
+	// using it. One chip says how many are on; the list says which.
+	Menu bool
+
+	// Focused is the bar's cursor sitting on this menu's chip. Set by the model
+	// as it draws, exactly as Option.Focused is, and meaningless on a group that
+	// is not a Menu — its own chips carry the cursor themselves.
+	Focused bool
 }
 
 // Key is one footer hint.
@@ -248,9 +266,14 @@ func (c Chrome) filterBar(labels bool) string {
 	groups := make([]string, 0, len(c.Groups))
 	for _, g := range c.Groups {
 		var b strings.Builder
-		if labels && g.Label != "" {
+		if labels && g.Label != "" && !g.Menu {
 			// Bold: dimmed alone, the name of a filter read as one of its values.
 			b.WriteString(s.Heading.Render(g.Label) + " ")
+		}
+		if g.Menu {
+			b.WriteString(c.menuChip(g))
+			groups = append(groups, b.String())
+			continue
 		}
 		for i, o := range g.Options {
 			if i > 0 {
@@ -272,6 +295,80 @@ func (c Chrome) filterBar(labels bool) string {
 		groups = append(groups, b.String())
 	}
 	return strings.Join(groups, s.Rule.Render(groupGap))
+}
+
+// menuChip is a whole group in one chip: the marker, and how many of it are on.
+//
+// The count rather than the names. Names would make the bar's width a property
+// of who is in the list, which is the thing a menu exists to avoid.
+func (c Chrome) menuChip(g Group) string {
+	s := c.Styles
+	on := 0
+	for _, o := range g.Options {
+		if o.Selected {
+			on++
+		}
+	}
+
+	style, mark, open, close := s.Desc, " ", " ", " "
+	if on > 0 {
+		style, mark = s.Selected, theme.Bullet
+	}
+	if g.Focused && c.Focus == FocusFilters {
+		open, close = "[", "]"
+	}
+	label := g.Label
+	if label == "" {
+		label = "select"
+	}
+	return style.Render(fmt.Sprintf("%s%s%s %d/%d ⌄%s",
+		open, mark, label, on, len(g.Options), close))
+}
+
+// menuBody is the open list: every member, with what is on marked and the
+// cursor where it is.
+//
+// The same two glyphs the chips use, for the same reason — where the cursor is
+// and what is set are different questions, and answering them with one mark
+// means you cannot see what you are about to toggle.
+func (c Chrome) menuBody(room int) []string {
+	s := c.Styles
+	g, ok := c.openMenu()
+	if !ok {
+		return nil
+	}
+
+	label := g.Label
+	if label == "" {
+		label = "select"
+	}
+	body := []string{s.Selected.Render(label)}
+	for _, o := range g.Options {
+		mark := " "
+		if o.Selected {
+			mark = theme.Bullet
+		}
+		line := " " + mark + " " + o.Label
+		if o.Focused {
+			line = s.Selected.Render("▸" + mark + " " + o.Label)
+		} else {
+			line = s.Desc.Render(line)
+		}
+		body = append(body, elide(line, room))
+	}
+	return append(body, "",
+		s.KeyName.Render("␣")+" "+s.KeyDesc.Render("toggle")+keyGap+
+			s.KeyName.Render("↵")+" "+s.KeyDesc.Render("done"))
+}
+
+// openMenu is the group the open menu belongs to.
+func (c Chrome) openMenu() (Group, bool) {
+	for _, g := range c.Groups {
+		if g.Menu && g.Focused {
+			return g, true
+		}
+	}
+	return Group{}, false
 }
 
 // Search is the query line: the magnifier, what has been typed, and the cursor
@@ -498,8 +595,11 @@ func (c Chrome) Window(width int) []string {
 	// The border, and the cell of padding inside it.
 	room := width - 4
 	body := c.confirmBody()
-	if c.Focus == FocusPrompt {
+	switch c.Focus {
+	case FocusPrompt:
 		body = c.promptBody(room)
+	case FocusMenu:
+		body = c.menuBody(room)
 	}
 
 	box := lipgloss.NewStyle().
@@ -518,6 +618,9 @@ func (c Chrome) asking() bool {
 		return c.Prompt.Label != ""
 	case FocusConfirm:
 		return !c.Confirm.Empty()
+	case FocusMenu:
+		_, ok := c.openMenu()
+		return ok
 	}
 	return false
 }

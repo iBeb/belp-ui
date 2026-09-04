@@ -1102,3 +1102,74 @@ func TestConfirmWindowIsDrawnOverTheList(t *testing.T) {
 		}
 	}
 }
+
+// A menu is one stop on the bar and a list once opened, so that a group whose
+// members are data — colleagues, repositories — cannot push the bar off screen.
+func TestMenuGroupIsOneChipUntilItIsOpened(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{
+		{Label: "kind", Options: []Option{{Label: "code"}, {Label: "pr"}}},
+		{Label: "users", Menu: true, Options: []Option{
+			{Label: "me", Selected: true}, {Label: "ada"}, {Label: "grace"},
+		}},
+	}
+	m.chrome.Focus = FocusFilters
+
+	// Two chips in the first group, then the menu: three stops, not five.
+	m, _ = press(m, "right", "right")
+	if !m.onMenu() {
+		t.Fatalf("cursor is at group %d option %d, want the menu chip", m.group, m.option)
+	}
+
+	// The bar shows the count, never the members: that is what keeps its width
+	// independent of how many people there are.
+	bar := m.chrome.Filters(200)
+	if !strings.Contains(bar, "users 1/3") {
+		t.Errorf("filter bar = %q, want the menu shown as a count", bar)
+	}
+	for _, name := range []string{"ada", "grace"} {
+		if strings.Contains(bar, name) {
+			t.Errorf("filter bar = %q, want %q only inside the open menu", bar, name)
+		}
+	}
+
+	// Enter opens it; space toggles a member; the bar's count follows.
+	m, _ = press(m, "enter")
+	if m.chrome.Focus != FocusMenu {
+		t.Fatalf("Focus = %v after enter, want FocusMenu", m.chrome.Focus)
+	}
+	m, _ = press(m, "down", " ") // onto "ada", select it
+	if got := m.SelectedIn(1); len(got) != 2 || got[1] != "ada" {
+		t.Errorf("SelectedIn(1) = %v, want me and ada", got)
+	}
+	if bar := m.chrome.Filters(200); !strings.Contains(bar, "users 2/3") {
+		t.Errorf("filter bar = %q, want the count to have followed", bar)
+	}
+
+	// Esc closes it and leaves the selection alone — every toggle already took
+	// effect when it was made.
+	m, _ = press(m, "esc")
+	if m.chrome.Focus != FocusFilters {
+		t.Errorf("Focus = %v after esc, want the bar again", m.chrome.Focus)
+	}
+	if got := m.SelectedIn(1); len(got) != 2 {
+		t.Errorf("SelectedIn(1) = %v after esc, want the two still selected", got)
+	}
+}
+
+// The open list is drawn over the rows, like the other overlays.
+func TestOpenMenuDrawsItsMembers(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{{Label: "users", Menu: true, Options: []Option{
+		{Label: "me", Selected: true}, {Label: "ada"},
+	}}}
+	m.chrome.Focus = FocusFilters
+	m, _ = press(m, "enter")
+
+	screen := m.View()
+	for _, want := range []string{"users", "me", "ada", "toggle", "done"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("the open menu does not show %q:\n%s", want, screen)
+		}
+	}
+}
