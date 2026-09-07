@@ -83,3 +83,48 @@ func forEachBand(t *testing.T, check func(t *testing.T, width int, name string, 
 		}
 	}
 }
+
+// A band keeps the width it is handed: nothing is laid out and then trimmed.
+//
+// The visible result of getting this wrong is nothing at all — the trimming
+// makes the edge look right — so it is checked against the width the callback
+// was given rather than against the picture. An app that lays out columns to a
+// width two wider than it keeps loses the end of the last one, and the only
+// symptom is content that quietly is not there.
+func TestABandKeepsTheWidthItIsHanded(t *testing.T) {
+	for _, width := range []int{40, 80, 160} {
+		var rowWidth, previewWidth int
+		m := New(sample())
+		m.Row = func(_, w int, _ bool) string {
+			rowWidth = w
+			return strings.Repeat("r", w)
+		}
+		m.Preview = func(_, w, h int) []string {
+			previewWidth = w
+			out := make([]string, h)
+			for i := range out {
+				out[i] = strings.Repeat("p", w)
+			}
+			return out
+		}
+		m.SetSize(width, 30)
+		m.SetRowCount(5)
+
+		l := m.Layout()
+		lines := strings.Split(m.View(), "\n")
+
+		// A row is not inset, so what it drew is what shows.
+		if got := lipgloss.Width(strings.TrimRight(lines[l.List.Y], " ")); got != rowWidth {
+			t.Errorf("width %d: row was handed %d columns and %d survived",
+				width, rowWidth, got)
+		}
+		// The preview is inset by a margin, so that much is added to what it drew.
+		if !l.Preview.Empty() {
+			got := lipgloss.Width(strings.TrimRight(lines[l.Preview.Y], " "))
+			if got != previewWidth+margin {
+				t.Errorf("width %d: preview was handed %d columns and %d survived",
+					width, previewWidth, got-margin)
+			}
+		}
+	}
+}

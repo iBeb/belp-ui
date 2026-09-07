@@ -869,7 +869,10 @@ func (m Model) previewLines(l Layout) []string {
 	if m.Preview == nil || l.Preview.Empty() || m.count == 0 {
 		return nil
 	}
-	return m.Preview(m.cursor, l.Width, l.Preview.Height)
+	// The width the preview actually keeps. It is drawn inset a margin either
+	// side, and Render trims it to that, so handing it the whole width does not
+	// buy two more columns — it means the app lays out two it never sees.
+	return m.Preview(m.cursor, l.Width-2*margin, l.Preview.Height)
 }
 
 // A line editor, expressed as functions over the text and where the cursor is in
