@@ -24,18 +24,30 @@ type Palette struct {
 	Warn    lipgloss.AdaptiveColor
 	Danger  lipgloss.AdaptiveColor // destructive and irreversible
 
-	// Two hues for kinds of thing rather than states of it. The three signals
-	// above answer "did it go well"; these answer "what sort of act was this",
-	// which is the question a feed of mixed activity asks on every line.
+	// A life cycle, in the order things travel through it: begun, under way,
+	// landed, and spent. Success is the landed step — a thing that arrived is
+	// the same green as a thing that went well — and Danger is the step a cycle
+	// takes when it ends badly instead.
 	//
-	// Kept apart from Accent on purpose: that one means "the thing you are
-	// about to act on", and a row coloured with it competes with the cursor.
-	Voice lipgloss.AdaptiveColor // something said — a comment, a note
-	Judge lipgloss.AdaptiveColor // something weighed — a review, a verdict
+	// A ramp rather than four unrelated hues, because the question a feed asks
+	// of every line is not "what sort of act was this" but "how far along is
+	// it": amber has not landed, teal is moving, green arrived, grey is over.
+	Begun  lipgloss.AdaptiveColor
+	Flight lipgloss.AdaptiveColor
+	Spent  lipgloss.AdaptiveColor
+
+	// Two neighbouring hues for acts on somebody else's work, which sit outside
+	// either cycle: they move nothing along, and colouring them as a stage
+	// would put them somewhere on a ramp they are not on.
+	//
+	// Kept clear of Accent, which means "the thing you are about to act on": a
+	// row drawn in it competes with the cursor.
+	Voice lipgloss.AdaptiveColor // something said — a comment
+	Judge lipgloss.AdaptiveColor // something weighed — a review
 }
 
 // DefaultPalette is deliberately restrained: one accent, three greys, three
-// signals, two voices. A launcher is glanced at rather than read, so colour is spent on
+// signals, a four-step life cycle, and two voices for other people. A launcher is glanced at rather than read, so colour is spent on
 // the thing you are about to act on and on warning you off the rest.
 func DefaultPalette() Palette {
 	return Palette{
@@ -47,7 +59,10 @@ func DefaultPalette() Palette {
 		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
 		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
 		Danger:  lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
-		Voice:   lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7dcfff"},
+		Begun:   lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
+		Flight:  lipgloss.AdaptiveColor{Light: "#0f766e", Dark: "#73daca"},
+		Spent:   lipgloss.AdaptiveColor{Light: "#767676", Dark: "#8a92b2"},
+		Voice:   lipgloss.AdaptiveColor{Light: "#9d174d", Dark: "#ff9ac1"},
 		Judge:   lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
 	}
 }
@@ -77,6 +92,9 @@ type Styles struct {
 	Success  lipgloss.Style
 	Warn     lipgloss.Style
 	Danger   lipgloss.Style
+	Begun    lipgloss.Style
+	Flight   lipgloss.Style
+	Spent    lipgloss.Style
 	Voice    lipgloss.Style
 	Judge    lipgloss.Style
 }
@@ -145,6 +163,9 @@ func New(p Palette) Styles {
 		Success:  fg(p.Success),
 		Warn:     fg(p.Warn),
 		Danger:   fg(p.Danger),
+		Begun:    fg(p.Begun),
+		Flight:   fg(p.Flight),
+		Spent:    fg(p.Spent),
 		Voice:    fg(p.Voice),
 		Judge:    fg(p.Judge),
 	}

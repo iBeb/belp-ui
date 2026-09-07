@@ -85,8 +85,13 @@ func render(darkBG bool) string {
 		s.Selected.Render("▸ Stack") + "  " + s.Desc.Render("the docker stack"),
 		"",
 		s.Label.Render("     Branch ") + s.Value.Render("main"),
-		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed") + " " +
-			s.Voice.Render("commented") + " " + s.Judge.Render("reviewed"),
+		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed"),
+		// The life cycle in the order it is travelled, then the two acts that
+		// are on somebody else's work and so sit outside it.
+		s.Begun.Render("begun") + " → " + s.Flight.Render("under way") + " → " +
+			s.Success.Render("landed") + " → " + s.Spent.Render("spent") +
+			"   (" + s.Danger.Render("ended badly") + ")   " +
+			s.Judge.Render("reviewed") + " " + s.Voice.Render("commented"),
 		"",
 		// The caret is a block of colour rather than a glyph with a shape, so
 		// whether it reads as a cursor or as a hole in the line is a thing only
