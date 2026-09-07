@@ -25,11 +25,16 @@ const Width = len("yesterday at 00:00")
 // now is passed rather than read so that a test can place itself in time. Callers
 // should hand it time.Now() at the moment of drawing and never keep it: a stored
 // clock is how a screen left open comes to call last week's work today.
+//
+// It also carries the zone everything is read in. Reading the machine's zone
+// instead would make the answer depend on where the process runs rather than on
+// its arguments, which is invisible in a test that happens to run in the zone it
+// writes its fixtures in — and a failure everywhere else.
 func When(t, now time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	t, now = t.Local(), now.Local()
+	t = t.In(now.Location())
 	clock := t.Format("15:04")
 	switch {
 	case SameDay(t, now):
