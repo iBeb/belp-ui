@@ -601,10 +601,14 @@ func window(n, follow, room int) (start, end int, cutLeft, cutRight bool) {
 // The margin either side matches the filter bar above it, so the two left edges
 // line up rather than stepping.
 func (c Chrome) SearchBox(width int) []string {
-	// The border's own two columns, and a cell of padding inside it: a magnifier
-	// touching the border reads as part of the frame rather than as the field's.
-	inner := width - 2*margin - 2 - 2*margin
-	if inner < 1 {
+	// Width on a lipgloss style counts the padding and not the border: measured,
+	// the border's two columns are added outside it. Subtracting the padding
+	// here as well made the box two columns narrower than the width it was
+	// given, so it stopped short of the edge every other band reaches.
+	inner := width - 2*margin - 2
+	// What is left for the text once the padding inside the border is taken.
+	text := inner - 2*margin
+	if text < 1 {
 		// No room to be a box. The field alone is still worth having: it says
 		// what has been typed, which is the part nothing else on screen says.
 		return []string{fit(c.Search(width), width), "", ""}
@@ -619,7 +623,7 @@ func (c Chrome) SearchBox(width int) []string {
 		BorderForeground(edge).
 		Padding(0, margin).
 		Width(inner).
-		Render(c.Search(inner))
+		Render(c.Search(text))
 
 	return inset(strings.Split(box, "\n")...)
 }

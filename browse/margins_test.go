@@ -29,7 +29,7 @@ func TestNoBandRunsPastTheRightEdge(t *testing.T) {
 // The bands that span: the list and the preview are filled to the width they are
 // given, and the search box is a border drawn to it.
 func TestSpanningBandsReachTheRightEdge(t *testing.T) {
-	spans := map[string]bool{"list": true, "preview": true}
+	spans := map[string]bool{"list": true, "preview": true, "search": true}
 	forEachBand(t, func(t *testing.T, width int, name string, y int, line string) {
 		if !spans[name] {
 			return
