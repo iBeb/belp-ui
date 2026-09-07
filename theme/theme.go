@@ -23,10 +23,19 @@ type Palette struct {
 	Success lipgloss.AdaptiveColor
 	Warn    lipgloss.AdaptiveColor
 	Danger  lipgloss.AdaptiveColor // destructive and irreversible
+
+	// Two hues for kinds of thing rather than states of it. The three signals
+	// above answer "did it go well"; these answer "what sort of act was this",
+	// which is the question a feed of mixed activity asks on every line.
+	//
+	// Kept apart from Accent on purpose: that one means "the thing you are
+	// about to act on", and a row coloured with it competes with the cursor.
+	Voice lipgloss.AdaptiveColor // something said — a comment, a note
+	Judge lipgloss.AdaptiveColor // something weighed — a review, a verdict
 }
 
 // DefaultPalette is deliberately restrained: one accent, three greys, three
-// signals. A launcher is glanced at rather than read, so colour is spent on
+// signals, two voices. A launcher is glanced at rather than read, so colour is spent on
 // the thing you are about to act on and on warning you off the rest.
 func DefaultPalette() Palette {
 	return Palette{
@@ -38,6 +47,8 @@ func DefaultPalette() Palette {
 		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
 		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
 		Danger:  lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
+		Voice:   lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7dcfff"},
+		Judge:   lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
 	}
 }
 
@@ -66,6 +77,8 @@ type Styles struct {
 	Success  lipgloss.Style
 	Warn     lipgloss.Style
 	Danger   lipgloss.Style
+	Voice    lipgloss.Style
+	Judge    lipgloss.Style
 }
 
 // Chevron is the separator between crumbs: a plain one, not a powerline
@@ -132,6 +145,8 @@ func New(p Palette) Styles {
 		Success:  fg(p.Success),
 		Warn:     fg(p.Warn),
 		Danger:   fg(p.Danger),
+		Voice:    fg(p.Voice),
+		Judge:    fg(p.Judge),
 	}
 }
 

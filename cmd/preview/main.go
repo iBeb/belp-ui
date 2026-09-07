@@ -85,7 +85,8 @@ func render(darkBG bool) string {
 		s.Selected.Render("▸ Stack") + "  " + s.Desc.Render("the docker stack"),
 		"",
 		s.Label.Render("     Branch ") + s.Value.Render("main"),
-		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed"),
+		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed") + " " +
+			s.Voice.Render("commented") + " " + s.Judge.Render("reviewed"),
 		"",
 		// The caret is a block of colour rather than a glyph with a shape, so
 		// whether it reads as a cursor or as a hole in the line is a thing only
