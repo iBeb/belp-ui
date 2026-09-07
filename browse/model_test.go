@@ -1486,3 +1486,43 @@ func TestClickingTheGroupCheckbox(t *testing.T) {
 		t.Errorf("SelectedIn(0) = %v after clicking again, want none of it", got)
 	}
 }
+
+// A letter bound as a shortcut still has to be typable.
+//
+// "a" and "n" select and clear a whole group while the chips have the focus.
+// They were bound with a guard that returned early when the focus was
+// elsewhere — which in a Go switch consumes the key rather than passing it on,
+// so both letters vanished from anything typed into the search field. The
+// symptom is a query missing letters, which reads as a search that does not
+// work rather than as a keybinding.
+func TestGroupShortcutsAreStillTypable(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up") // the search field is the row above the first
+	if m.Focus() != FocusSearch {
+		t.Fatalf("focus = %v, want the search field", m.Focus())
+	}
+	m, _ = press(m, "ctrl+u") // start from an empty field
+	for _, r := range []string{"b", "a", "n", "a", "n", "a"} {
+		m, _ = press(m, r)
+	}
+	if got := m.Query(); got != "banana" {
+		t.Errorf("query = %q, want %q — a letter bound to a shortcut was eaten", got, "banana")
+	}
+}
+
+// And the shortcut still works where it is meant to: on the chips.
+func TestGroupShortcutsStillSelectAWholeGroup(t *testing.T) {
+	m := model(10)
+	m, _ = press(m, "up", "up") // through the search field, onto the chips
+	if m.Focus() != FocusFilters {
+		t.Fatalf("focus = %v, want the chips", m.Focus())
+	}
+	before := m.Query()
+	m, cmd := press(m, "a")
+	if cmd == nil {
+		t.Fatal("selecting a whole group reported no change")
+	}
+	if q := m.Query(); q != before {
+		t.Errorf("query = %q, want %q — untouched while the chips have the focus", q, before)
+	}
+}

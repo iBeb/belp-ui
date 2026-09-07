@@ -446,10 +446,15 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, 1)
 		}
 
-	// Whole groups, by letter. Free to bind because typing only reaches the
-	// query while the search field has the focus.
+	// Whole groups, by letter, while the chips have the focus.
+	//
+	// The letter has to be handed back when they do not. A case that returns
+	// early consumes the key — a Go switch does not fall through — so guarding
+	// this one that way deleted every a and n from anything typed into the
+	// search field, which reads as a search that does not work.
 	case "a", "n":
 		if m.chrome.Focus != FocusFilters && m.chrome.Focus != FocusMenu {
+			m.typeKey(msg)
 			break
 		}
 		if m.setGroup(m.group, msg.String() == "a") {
@@ -530,16 +535,23 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	default:
-		// Typing reaches the query only while the search field has the focus.
-		// Otherwise every letter would be both a search term and a shortcut,
-		// and the list could never have single-key bindings of its own.
-		if m.chrome.Focus == FocusSearch && msg.Type == tea.KeyRunes {
-			m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, string(msg.Runes))
-		}
+		m.typeKey(msg)
 	}
 
 	m.clamp()
 	return m, nil
+}
+
+// typeKey puts a printable key into the query, and is the only path that does.
+//
+// Shared with the cases bound to a letter, so that a shortcut which declines a
+// key returns it rather than swallowing it. Typing reaches the query only while
+// the search field has the focus: otherwise every letter would be both a search
+// term and a shortcut, and the list could never have single-key bindings.
+func (m *Model) typeKey(msg tea.KeyMsg) {
+	if m.chrome.Focus == FocusSearch && msg.Type == tea.KeyRunes {
+		m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, string(msg.Runes))
+	}
 }
 
 // confirm is the keyboard while a confirmation window is open.
