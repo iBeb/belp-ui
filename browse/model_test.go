@@ -1189,15 +1189,17 @@ func TestChipSpansLandOnTheirChips(t *testing.T) {
 	l := m.Layout()
 	bar, spans := m.drawn().filterLayout(l.Width - 2*margin)
 	plain := []rune(stripANSI(bar))
-	if len(spans) != 5 {
-		t.Fatalf("got %d span(s), want one per chip plus the menu", len(spans))
+	// Four chips, the menu's own chip, and a name for each of the two groups
+	// that have one and can be taken whole.
+	if len(spans) != 7 {
+		t.Fatalf("got %d span(s), want one per chip, the menu, and the two names", len(spans))
 	}
 	for _, sp := range spans {
 		if sp.x0 < 0 || sp.x1 > len(plain) || sp.x0 >= sp.x1 {
 			t.Fatalf("span %+v is outside the bar of %d cells", sp, len(plain))
 		}
 		want := m.chrome.Groups[sp.group].Label
-		if !sp.menu {
+		if !sp.menu && !sp.label {
 			want = m.chrome.Groups[sp.group].Options[sp.option].Label
 		}
 		// Exactly where the chip is, to the cell. Trimming the padding away
@@ -1207,7 +1209,12 @@ func TestChipSpansLandOnTheirChips(t *testing.T) {
 		//
 		// Every chip is drawn as one cell of bracket-or-space, the selected
 		// mark, the label, then the closing cell.
-		const beforeLabel = 2
+		// A chip is drawn as bracket-or-space, the mark, the label, the closing
+		// cell; a name is drawn where it starts.
+		beforeLabel := 2
+		if sp.label {
+			beforeLabel = 0
+		}
 		at := sp.x0 + beforeLabel
 		if at+len([]rune(want)) > len(plain) {
 			t.Fatalf("span %+v claims cells past the end of a %d-cell bar", sp, len(plain))
@@ -1315,5 +1322,77 @@ func stripANSI(s string) string {
 			return b.String()
 		}
 		s = s[i+j+1:]
+	}
+}
+
+// Five chips lit and only the sixth wanted means five clicks to undo. All and
+// none are the way out of a group you have half filled in.
+func TestAllAndNoneTakeAWholeGroup(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{
+		{Label: "code", Options: []Option{
+			{Label: "commit", Selected: true}, {Label: "push"}, {Label: "branch", Selected: true},
+		}},
+		{Label: "when", Exclusive: true, Options: []Option{
+			{Label: "7d", Selected: true}, {Label: "30d"},
+		}},
+	}
+	m.chrome.Focus = FocusFilters
+
+	m, cmd := press(m, "a")
+	if got := m.SelectedIn(0); len(got) != 3 {
+		t.Errorf("SelectedIn(0) = %v after a, want all three", got)
+	}
+	if cmd == nil {
+		t.Error("no command after taking the group")
+	} else if _, ok := cmd().(FiltersChangedMsg); !ok {
+		t.Error("the group change was not reported")
+	}
+
+	m, _ = press(m, "n")
+	if got := m.SelectedIn(0); len(got) != 0 {
+		t.Errorf("SelectedIn(0) = %v after n, want none", got)
+	}
+
+	// An exclusive group is not a set you can empty or fill: a date range with
+	// every window lit, or none, answers nothing.
+	m.group = 1
+	m, cmd = press(m, "n")
+	if got := m.SelectedIn(1); len(got) != 1 || got[0] != "7d" {
+		t.Errorf("SelectedIn(1) = %v, want the window untouched", got)
+	}
+	if cmd != nil {
+		t.Error("an exclusive group reported a change it did not make")
+	}
+}
+
+// Clicking the group's name is the pointing version of the same thing.
+func TestClickingTheGroupNameTogglesTheWholeGroup(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{
+		{Label: "code", Options: []Option{{Label: "commit", Selected: true}, {Label: "push"}}},
+	}
+	m.chrome.Focus = FocusFilters
+
+	l := m.Layout()
+	bar, _ := m.drawn().filterLayout(l.Width - 2*margin)
+	at := strings.Index(stripANSI(bar), "code")
+	if at < 0 {
+		t.Fatal("the bar does not draw the group name")
+	}
+
+	// Half on: the click fills it.
+	m, cmd := m.Update(click(margin+at, l.Filters.Y))
+	if got := m.SelectedIn(0); len(got) != 2 {
+		t.Errorf("SelectedIn(0) = %v after clicking the name, want all of it", got)
+	}
+	if cmd == nil {
+		t.Error("no command after clicking the name")
+	}
+
+	// All on: the click empties it.
+	m, _ = m.Update(click(margin+at, l.Filters.Y))
+	if got := m.SelectedIn(0); len(got) != 0 {
+		t.Errorf("SelectedIn(0) = %v after clicking again, want none of it", got)
 	}
 }

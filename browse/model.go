@@ -284,6 +284,16 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		// And clicking a chip is the same as arrowing onto it and pressing
 		// space: the cursor goes there, then the chip answers.
 		if sp, ok := m.chipAt(msg.X, l); ok {
+			// The name, rather than a chip: all of it on, or all of it off.
+			// Toggling suits a pointing gesture — one target, and the state is
+			// visible in the chips beside it.
+			if sp.label {
+				m.group = sp.group
+				if m.setGroup(sp.group, !m.groupIsAllOn(sp.group)) {
+					return m, func() tea.Msg { return FiltersChangedMsg{} }
+				}
+				return m, nil
+			}
 			m.group, m.option = sp.group, sp.option
 			if sp.menu {
 				m.chrome.Focus, m.option = FocusMenu, 0
@@ -438,6 +448,16 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.moveChip(1)
 		case FocusSearch:
 			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, 1)
+		}
+
+	// Whole groups, by letter. Free to bind because typing only reaches the
+	// query while the search field has the focus.
+	case "a", "n":
+		if m.chrome.Focus != FocusFilters && m.chrome.Focus != FocusMenu {
+			break
+		}
+		if m.setGroup(m.group, msg.String() == "a") {
+			return m, func() tea.Msg { return FiltersChangedMsg{} }
 		}
 
 	case "enter", " ":
@@ -628,6 +648,46 @@ func (m *Model) moveInMenu(delta int) {
 	if n := len(m.chrome.Groups[m.group].Options); n > 0 {
 		m.option = clamp(m.option+delta, 0, n-1)
 	}
+}
+
+// setGroup selects or clears every option in one group.
+//
+// The way out of a group you have half filled in: five chips lit and a sixth
+// wanted means five clicks to undo, which is why "none" exists at all.
+//
+// Exclusive groups are left alone — a date range with every window lit, or none,
+// is not an answer — and copy on write for the same reason toggleChip is: a
+// Model travels by value and several copies share one backing array.
+func (m *Model) setGroup(g int, all bool) bool {
+	if g >= len(m.chrome.Groups) || m.chrome.Groups[g].Exclusive {
+		return false
+	}
+	groups := make([]Group, len(m.chrome.Groups))
+	copy(groups, m.chrome.Groups)
+
+	group := groups[g]
+	options := make([]Option, len(group.Options))
+	copy(options, group.Options)
+	for i := range options {
+		options[i].Selected = all
+	}
+	group.Options = options
+	groups[g] = group
+	m.chrome.Groups = groups
+	return true
+}
+
+// groupIsAllOn reports whether every option in a group is selected.
+func (m Model) groupIsAllOn(g int) bool {
+	if g >= len(m.chrome.Groups) || len(m.chrome.Groups[g].Options) == 0 {
+		return false
+	}
+	for _, o := range m.chrome.Groups[g].Options {
+		if !o.Selected {
+			return false
+		}
+	}
+	return true
 }
 
 // onMenu reports whether the bar's cursor is sitting on a menu's chip.

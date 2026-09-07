@@ -262,7 +262,12 @@ func (c Chrome) Filters(width int) string {
 type span struct {
 	group, option int
 	menu          bool
-	x0, x1        int
+
+	// label marks the group's name rather than one of its chips. Clicking it
+	// takes the whole group at once, which is the only quick way to say "not
+	// this kind of thing at all" when a group holds five chips.
+	label  bool
+	x0, x1 int
 }
 
 // filterLayout is the bar as it will be drawn and where every chip landed.
@@ -310,7 +315,11 @@ func (c Chrome) filterBar(labels bool) (string, []span) {
 		}
 		if labels && g.Label != "" && !g.Menu {
 			// Bold: dimmed alone, the name of a filter read as one of its values.
-			write(s.Heading.Render(g.Label) + " ")
+			name := s.Heading.Render(g.Label)
+			if !g.Exclusive {
+				spans = append(spans, span{group: gi, label: true, x0: x, x1: x + lipgloss.Width(name)})
+			}
+			write(name + " ")
 		}
 		if g.Menu {
 			chip := c.menuChip(g)
