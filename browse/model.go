@@ -2,6 +2,7 @@ package browse
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RowFunc renders row i to at most width cells, told whether the cursor is on it
@@ -262,10 +263,35 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		return m, nil // releases, motion and other buttons are not ours
 	}
 
+	// An open menu covers the list, so it answers first: a click on a member is
+	// about the member, whatever band is underneath it.
+	if m.chrome.Focus == FocusMenu {
+		if o, ok := m.memberAt(msg.X, msg.Y, l); ok {
+			m.option = o
+			m.toggleChip()
+			return m, func() tea.Msg { return FiltersChangedMsg{} }
+		}
+		// Clicking away closes it, which is what clicking away means everywhere
+		// else. The selection stands: each toggle already took effect.
+		m.chrome.Focus = FocusFilters
+		return m, nil
+	}
+
 	// Clicking a band is the same as arrowing to it.
 	switch y := msg.Y; {
 	case !l.Filters.Empty() && y == l.Filters.Y:
 		m.chrome.Focus = FocusFilters
+		// And clicking a chip is the same as arrowing onto it and pressing
+		// space: the cursor goes there, then the chip answers.
+		if sp, ok := m.chipAt(msg.X, l); ok {
+			m.group, m.option = sp.group, sp.option
+			if sp.menu {
+				m.chrome.Focus, m.option = FocusMenu, 0
+				return m, nil
+			}
+			m.toggleChip()
+			return m, func() tea.Msg { return FiltersChangedMsg{} }
+		}
 	// Anywhere on the box, border included: the border is part of what looks
 	// like the field, and a click on it that did nothing would read as the field
 	// refusing the focus.
@@ -285,6 +311,43 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		return m, func() tea.Msg { return PreviewClickMsg{Line: line} }
 	}
 	return m, nil
+}
+
+// chipAt is the chip at a click, if the click landed on one. Gaps, labels and
+// the group separators are not chips and answer nothing.
+func (m Model) chipAt(x int, l Layout) (span, bool) {
+	// The bar is drawn inset by the margin, so a click has to come back out of
+	// it before it can be compared with a span.
+	_, spans := m.drawn().filterLayout(l.Width - 2*margin)
+	at := x - margin
+	for _, sp := range spans {
+		if at >= sp.x0 && at < sp.x1 {
+			return sp, true
+		}
+	}
+	return span{}, false
+}
+
+// memberAt is the member of the open menu at a click, if the click landed on
+// one. Inside the box but on its border, its label or its key hints is still
+// inside the box: it closes nothing and toggles nothing.
+func (m Model) memberAt(x, y int, l Layout) (int, bool) {
+	c := m.drawn()
+	box, top, left := c.windowAt(l)
+	if len(box) == 0 {
+		return 0, false
+	}
+	if x < left || x >= left+lipgloss.Width(box[0]) || y < top || y >= top+len(box) {
+		return 0, false
+	}
+	if m.group >= len(m.chrome.Groups) {
+		return 0, false
+	}
+	i := y - top - menuHeader
+	if i < 0 || i >= len(m.chrome.Groups[m.group].Options) {
+		return 0, false
+	}
+	return i, true
 }
 
 // scroll moves the viewport and takes the cursor along only as far as it must.
@@ -679,18 +742,25 @@ func (m *Model) clamp() {
 // View draws the screen.
 func (m Model) View() string {
 	l := m.Layout()
-	c := m.chrome
+	return m.drawn().Render(l, m.rows(l), m.previewLines(l))
+}
 
-	// The chip the cursor is on is a property of the model, stamped onto a copy
-	// of the groups at draw time. Keeping it on the options themselves would
-	// mean two places that have to agree about where the cursor is.
-	// FocusMenu needs them too: the open list draws its own cursor, and the
-	// group it belongs to is the one the bar's cursor is on.
+// drawn is the chrome as the screen has it.
+//
+// The chip the cursor is on is a property of the model, stamped onto a copy of
+// the groups at draw time — keeping it on the options themselves would mean two
+// places that have to agree about where the cursor is. FocusMenu needs the same
+// stamp: the open list draws its own cursor, and the group it belongs to is the
+// one the bar's cursor is on.
+//
+// Hit-testing goes through here as well, so a click is measured against what was
+// actually drawn rather than against a second guess at it.
+func (m Model) drawn() Chrome {
+	c := m.chrome
 	if c.Focus == FocusFilters || c.Focus == FocusMenu {
 		c.Groups = m.groupsWithCursor()
 	}
-
-	return c.Render(l, m.rows(l), m.previewLines(l))
+	return c
 }
 
 func (m Model) groupsWithCursor() []Group {

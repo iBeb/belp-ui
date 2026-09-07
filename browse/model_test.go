@@ -1173,3 +1173,147 @@ func TestOpenMenuDrawsItsMembers(t *testing.T) {
 		}
 	}
 }
+
+// Every span has to sit on the chip it claims. This is the test that catches a
+// renderer and a hit-test drifting apart, which shows up as a chip toggling its
+// neighbour rather than as anything obviously broken.
+func TestChipSpansLandOnTheirChips(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{
+		{Label: "code", Options: []Option{{Label: "commit"}, {Label: "push", Selected: true}}},
+		{Label: "pr", Options: []Option{{Label: "opened"}, {Label: "merged"}}},
+		{Label: "who", Menu: true, Options: []Option{{Label: "me", Selected: true}, {Label: "ada"}}},
+	}
+	m.chrome.Focus = FocusFilters
+
+	l := m.Layout()
+	bar, spans := m.drawn().filterLayout(l.Width - 2*margin)
+	plain := []rune(stripANSI(bar))
+	if len(spans) != 5 {
+		t.Fatalf("got %d span(s), want one per chip plus the menu", len(spans))
+	}
+	for _, sp := range spans {
+		if sp.x0 < 0 || sp.x1 > len(plain) || sp.x0 >= sp.x1 {
+			t.Fatalf("span %+v is outside the bar of %d cells", sp, len(plain))
+		}
+		want := m.chrome.Groups[sp.group].Label
+		if !sp.menu {
+			want = m.chrome.Groups[sp.group].Options[sp.option].Label
+		}
+		// Exactly where the chip is, to the cell. Trimming the padding away
+		// instead would let a span shifted by a cell or two still "contain" its
+		// label and pass, while sending clicks to the chip next door — which is
+		// precisely the bug this is here to catch.
+		//
+		// Every chip is drawn as one cell of bracket-or-space, the selected
+		// mark, the label, then the closing cell.
+		const beforeLabel = 2
+		at := sp.x0 + beforeLabel
+		if at+len([]rune(want)) > len(plain) {
+			t.Fatalf("span %+v claims cells past the end of a %d-cell bar", sp, len(plain))
+		}
+		if got := string(plain[at : at+len([]rune(want))]); got != want {
+			t.Errorf("span %+v puts %q where %q is drawn (bar %q)", sp, got, want, string(plain))
+		}
+	}
+}
+
+// Clicking a chip is arrowing onto it and pressing space.
+func TestClickingAChipTogglesIt(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{
+		{Label: "code", Options: []Option{{Label: "commit"}, {Label: "push"}}},
+	}
+	m.chrome.Focus = FocusList
+
+	l := m.Layout()
+	bar, _ := m.drawn().filterLayout(l.Width - 2*margin)
+	at := strings.Index(stripANSI(bar), "push")
+	if at < 0 {
+		t.Fatal("the bar does not draw the push chip")
+	}
+
+	m, cmd := m.Update(click(margin+at, l.Filters.Y))
+	if m.Focus() != FocusFilters {
+		t.Errorf("Focus() = %v after a click on the bar, want FocusFilters", m.Focus())
+	}
+	if got := m.SelectedIn(0); len(got) != 1 || got[0] != "push" {
+		t.Errorf("SelectedIn(0) = %v, want [push]", got)
+	}
+	if cmd == nil {
+		t.Error("no command after a click that changed the filters")
+	} else if _, ok := cmd().(FiltersChangedMsg); !ok {
+		t.Error("the click did not report the filters as changed")
+	}
+
+	// A click on the gap between groups is not a click on a chip.
+	before := m.SelectedIn(0)
+	m, _ = m.Update(click(l.Width-2, l.Filters.Y))
+	if got := m.SelectedIn(0); len(got) != len(before) {
+		t.Errorf("SelectedIn(0) = %v after clicking empty bar, want %v", got, before)
+	}
+}
+
+// The menu opens on a click, its members toggle on a click, and a click outside
+// it closes it.
+func TestClickingWorksThroughTheMenu(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{{Label: "who", Menu: true, Options: []Option{
+		{Label: "me", Selected: true}, {Label: "ada"}, {Label: "grace"},
+	}}}
+	m.chrome.Focus = FocusFilters
+
+	l := m.Layout()
+	bar, _ := m.drawn().filterLayout(l.Width - 2*margin)
+	at := strings.Index(stripANSI(bar), "who")
+	if at < 0 {
+		t.Fatal("the bar does not draw the menu chip")
+	}
+	m, _ = m.Update(click(margin+at, l.Filters.Y))
+	if m.Focus() != FocusMenu {
+		t.Fatalf("Focus() = %v after clicking the menu chip, want FocusMenu", m.Focus())
+	}
+
+	// The second member sits menuHeader lines into the box.
+	box, top, left := m.drawn().windowAt(l)
+	if len(box) == 0 {
+		t.Fatal("the open menu drew no box")
+	}
+	m, cmd := m.Update(click(left+2, top+menuHeader+1)) // "ada"
+	if got := m.SelectedIn(0); len(got) != 2 || got[1] != "ada" {
+		t.Errorf("SelectedIn(0) = %v, want me and ada", got)
+	}
+	if cmd == nil {
+		t.Error("no command after toggling a member")
+	}
+	if m.Focus() != FocusMenu {
+		t.Error("toggling a member closed the menu; it should stay open for the next one")
+	}
+
+	// Away from the box: closed, and nothing toggled by it.
+	m, _ = m.Update(click(0, l.Preview.Y))
+	if m.Focus() != FocusFilters {
+		t.Errorf("Focus() = %v after clicking away, want the bar", m.Focus())
+	}
+	if got := m.SelectedIn(0); len(got) != 2 {
+		t.Errorf("SelectedIn(0) = %v after clicking away, want the two kept", got)
+	}
+}
+
+// stripANSI drops the styling so a test can count cells.
+func stripANSI(s string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, "\x1b[")
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i])
+		j := strings.IndexByte(s[i:], 'm')
+		if j < 0 {
+			return b.String()
+		}
+		s = s[i+j+1:]
+	}
+}

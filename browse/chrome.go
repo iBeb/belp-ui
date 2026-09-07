@@ -252,32 +252,75 @@ func (c Chrome) Header(width int) string {
 // then the rest is elided: a chip that is set and off the end means a list
 // filtered in a way you cannot see.
 func (c Chrome) Filters(width int) string {
-	if full := c.filterBar(true); lipgloss.Width(full) <= width {
-		return full
-	}
-	if short := c.filterBar(false); lipgloss.Width(short) <= width {
-		return short
-	}
-	return elide(c.filterBar(false), width)
+	bar, _ := c.filterLayout(width)
+	return bar
 }
 
-func (c Chrome) filterBar(labels bool) string {
+// span is where one chip sits on the filter row, in cells from the bar's own
+// start, x1 exclusive. menu marks the chip that opens a group rather than
+// toggling one option.
+type span struct {
+	group, option int
+	menu          bool
+	x0, x1        int
+}
+
+// filterLayout is the bar as it will be drawn and where every chip landed.
+//
+// One pass, two answers, on purpose: a click and the glyph it lands on have to
+// come from the same measurement, or a later edit to the renderer leaves a chip
+// toggling its neighbour.
+func (c Chrome) filterLayout(width int) (string, []span) {
+	if full, spans := c.filterBar(true); lipgloss.Width(full) <= width {
+		return full, spans
+	}
+	short, spans := c.filterBar(false)
+	if lipgloss.Width(short) <= width {
+		return short, spans
+	}
+
+	// Elided: whatever fell past the cut is not on screen and so has no span. A
+	// click out there does nothing rather than guessing at the nearest chip.
+	bar := elide(short, width)
+	shown := lipgloss.Width(bar)
+	kept := make([]span, 0, len(spans))
+	for _, sp := range spans {
+		if sp.x1 <= shown {
+			kept = append(kept, sp)
+		}
+	}
+	return bar, kept
+}
+
+func (c Chrome) filterBar(labels bool) (string, []span) {
 	s := c.Styles
-	groups := make([]string, 0, len(c.Groups))
-	for _, g := range c.Groups {
-		var b strings.Builder
+	var b strings.Builder
+	var spans []span
+
+	// x counts cells, not bytes: the styling is escape codes that occupy none.
+	x := 0
+	write := func(text string) {
+		b.WriteString(text)
+		x += lipgloss.Width(text)
+	}
+
+	for gi, g := range c.Groups {
+		if gi > 0 {
+			write(s.Rule.Render(groupGap))
+		}
 		if labels && g.Label != "" && !g.Menu {
 			// Bold: dimmed alone, the name of a filter read as one of its values.
-			b.WriteString(s.Heading.Render(g.Label) + " ")
+			write(s.Heading.Render(g.Label) + " ")
 		}
 		if g.Menu {
-			b.WriteString(c.menuChip(g))
-			groups = append(groups, b.String())
+			chip := c.menuChip(g)
+			spans = append(spans, span{group: gi, menu: true, x0: x, x1: x + lipgloss.Width(chip)})
+			write(chip)
 			continue
 		}
 		for i, o := range g.Options {
 			if i > 0 {
-				b.WriteString(" ")
+				write(" ")
 			}
 			// A chip carries two things at once and needs a glyph for each: the
 			// brackets are where the cursor is, the bullet is what is set. Every
@@ -287,14 +330,17 @@ func (c Chrome) filterBar(labels bool) string {
 			if o.Selected {
 				style, mark = s.Selected, theme.Bullet
 			}
+			// Brackets replace the spaces rather than adding to them, so a chip
+			// is the same width focused or not and the spans hold still.
 			if o.Focused && c.Focus == FocusFilters {
 				open, close = "[", "]"
 			}
-			b.WriteString(style.Render(open + mark + o.Label + close))
+			chip := style.Render(open + mark + o.Label + close)
+			spans = append(spans, span{group: gi, option: i, x0: x, x1: x + lipgloss.Width(chip)})
+			write(chip)
 		}
-		groups = append(groups, b.String())
 	}
-	return strings.Join(groups, s.Rule.Render(groupGap))
+	return b.String(), spans
 }
 
 // menuChip is a whole group in one chip: the marker, and how many of it are on.
@@ -560,17 +606,34 @@ func (c Chrome) Footer(width int) string {
 const windowMax = 64
 
 // putWindow centres the question over the list.
-func (c Chrome) putWindow(out []string, l Layout) {
-	box := c.Window(min(l.Width-2*margin, windowMax))
+// windowAt is the overlay and where it goes: the lines, and the top-left corner
+// they are placed at.
+//
+// Drawing and hit-testing both come through here. A click inside a box whose
+// position was worked out twice is a click that lands one row off the day
+// somebody changes the padding.
+func (c Chrome) windowAt(l Layout) (box []string, top, left int) {
+	box = c.Window(min(l.Width-2*margin, windowMax))
 	if len(box) == 0 {
-		return
+		return nil, 0, 0
 	}
-
 	// Centred in the list, or wherever there is room for it: on a short terminal
 	// the list is three rows and the box is five, so it starts at the top of the
 	// band and takes what it needs rather than vanishing.
-	top := l.List.Y + max(0, (l.List.Height-len(box))/2)
-	left := max(0, (l.Width-lipgloss.Width(box[0]))/2)
+	top = l.List.Y + max(0, (l.List.Height-len(box))/2)
+	left = max(0, (l.Width-lipgloss.Width(box[0]))/2)
+	return box, top, left
+}
+
+// menuHeader is how many lines of the box come before the first member: the
+// border, then the label. Kept beside menuBody, which is what decides it.
+const menuHeader = 2
+
+func (c Chrome) putWindow(out []string, l Layout) {
+	box, top, left := c.windowAt(l)
+	if len(box) == 0 {
+		return
+	}
 	pad := strings.Repeat(" ", left)
 	for i, line := range box {
 		if y := top + i; y >= 0 && y < len(out) {

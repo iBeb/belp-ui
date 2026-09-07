@@ -216,7 +216,7 @@ func TestFiltersDropLabelsBeforeChips(t *testing.T) {
 	c := sample()
 
 	full := c.Filters(200)
-	width := lipgloss.Width(c.filterBar(false))
+	width := lipgloss.Width(firstOf(c.filterBar(false)))
 	tight := c.Filters(width)
 
 	if strings.Contains(tight, "did") || strings.Contains(tight, "is ") {
@@ -558,3 +558,6 @@ func TestASetChipIsMarkedAndNotOnlyColoured(t *testing.T) {
 		}
 	}
 }
+
+// firstOf drops the spans, for a test that only wants the bar.
+func firstOf(bar string, _ []span) string { return bar }
