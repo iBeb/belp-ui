@@ -481,8 +481,16 @@ func TestChipCursorCrossesGroups(t *testing.T) {
 	m := model(10)
 	m.chrome.Focus = FocusFilters
 
-	// sample(): three chips, then two, then one.
-	want := []chipAt{{0, 0}, {0, 1}, {0, 2}, {1, 0}, {1, 1}, {2, 0}}
+	// sample(): a named group of three, a named group of two, then an unnamed
+	// group of one. Each named group leads with its own checkbox, which is a
+	// stop like any other — the whole group before its parts.
+	// The cursor opens on the first chip; each named group's checkbox is the
+	// stop before its own chips.
+	want := []chipAt{
+		{0, 0}, {0, 1}, {0, 2},
+		{1, boxOption}, {1, 0}, {1, 1},
+		{2, 0},
+	}
 	for i, w := range want {
 		if m.group != w.group || m.option != w.option {
 			t.Fatalf("step %d: chip at (%d,%d), want (%d,%d)", i, m.group, m.option, w.group, w.option)
@@ -499,8 +507,10 @@ func TestChipCursorCrossesGroups(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		m, _ = press(m, "left")
 	}
-	if m.group != 0 || m.option != 0 {
-		t.Errorf("chip at (%d,%d), want to stop at the first", m.group, m.option)
+	// The leftmost stop is the first group's checkbox, which is drawn before
+	// its chips: nothing on the bar is out of reach.
+	if m.group != 0 || m.option != boxOption {
+		t.Errorf("chip at (%d,%d), want to stop at the first group's box", m.group, m.option)
 	}
 }
 
@@ -1189,10 +1199,10 @@ func TestChipSpansLandOnTheirChips(t *testing.T) {
 	l := m.Layout()
 	bar, spans := m.drawn().filterLayout(l.Width - 2*margin)
 	plain := []rune(stripANSI(bar))
-	// Four chips, the menu's own chip, and a name for each of the two groups
-	// that have one and can be taken whole.
+	// Four chips, the menu's own chip, and a checkbox for each of the two
+	// groups that have a name and can be taken whole.
 	if len(spans) != 7 {
-		t.Fatalf("got %d span(s), want one per chip, the menu, and the two names", len(spans))
+		t.Fatalf("got %d span(s), want one per chip, the menu, and the two boxes", len(spans))
 	}
 	for _, sp := range spans {
 		if sp.x0 < 0 || sp.x1 > len(plain) || sp.x0 >= sp.x1 {
@@ -1210,10 +1220,11 @@ func TestChipSpansLandOnTheirChips(t *testing.T) {
 		// Every chip is drawn as one cell of bracket-or-space, the selected
 		// mark, the label, then the closing cell.
 		// A chip is drawn as bracket-or-space, the mark, the label, the closing
-		// cell; a name is drawn where it starts.
+		// cell. A checkbox has a space between its mark and the group's name,
+		// so its label starts one cell further in.
 		beforeLabel := 2
 		if sp.label {
-			beforeLabel = 0
+			beforeLabel = 3
 		}
 		at := sp.x0 + beforeLabel
 		if at+len([]rune(want)) > len(plain) {
@@ -1391,6 +1402,85 @@ func TestClickingTheGroupNameTogglesTheWholeGroup(t *testing.T) {
 	}
 
 	// All on: the click empties it.
+	m, _ = m.Update(click(margin+at, l.Filters.Y))
+	if got := m.SelectedIn(0); len(got) != 0 {
+		t.Errorf("SelectedIn(0) = %v after clicking again, want none of it", got)
+	}
+}
+
+// The checkbox says what the whole group is set to and sets all of it. Three
+// states, because "some" is where a group spends most of its life and drawing
+// it as either of the others makes the click a surprise.
+func TestGroupCheckboxShowsAndSetsTheWholeGroup(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{{Label: "code", Options: []Option{
+		{Label: "commit"}, {Label: "push"},
+	}}}
+	m.chrome.Focus = FocusFilters
+
+	bar := func(m Model) string {
+		out, _ := m.drawn().filterLayout(m.Layout().Width - 2*margin)
+		return stripANSI(out)
+	}
+	if got := bar(m); !strings.Contains(got, theme.BoxNone+" code") {
+		t.Errorf("bar = %q, want an empty box on a group with nothing set", got)
+	}
+
+	// One of two: some.
+	m.group, m.option = 0, 0
+	m, _ = press(m, " ")
+	if got := bar(m); !strings.Contains(got, theme.BoxSome+" code") {
+		t.Errorf("bar = %q, want a part-filled box on a group half set", got)
+	}
+
+	// The box itself: all of it.
+	m.option = boxOption
+	m, cmd := press(m, " ")
+	if got := m.SelectedIn(0); len(got) != 2 {
+		t.Errorf("SelectedIn(0) = %v after the box, want the whole group", got)
+	}
+	if got := bar(m); !strings.Contains(got, theme.BoxAll+" code") {
+		t.Errorf("bar = %q, want a full box on a group wholly set", got)
+	}
+	if cmd == nil {
+		t.Error("the box reported no change")
+	} else if _, ok := cmd().(FiltersChangedMsg); !ok {
+		t.Error("the box did not report the filters as changed")
+	}
+
+	// And again: none of it.
+	m, _ = press(m, " ")
+	if got := m.SelectedIn(0); len(got) != 0 {
+		t.Errorf("SelectedIn(0) = %v after the box again, want none of it", got)
+	}
+	if got := bar(m); !strings.Contains(got, theme.BoxNone+" code") {
+		t.Errorf("bar = %q, want an empty box again", got)
+	}
+}
+
+// Clicking the box is the same as pressing space on it.
+func TestClickingTheGroupCheckbox(t *testing.T) {
+	m := model(10)
+	m.chrome.Groups = []Group{{Label: "code", Options: []Option{
+		{Label: "commit", Selected: true}, {Label: "push"},
+	}}}
+	m.chrome.Focus = FocusFilters
+
+	l := m.Layout()
+	bar, _ := m.drawn().filterLayout(l.Width - 2*margin)
+	at := strings.Index(stripANSI(bar), theme.BoxSome)
+	if at < 0 {
+		t.Fatalf("no part-filled box in %q", stripANSI(bar))
+	}
+
+	m, cmd := m.Update(click(margin+at, l.Filters.Y))
+	if got := m.SelectedIn(0); len(got) != 2 {
+		t.Errorf("SelectedIn(0) = %v after clicking the box, want all of it", got)
+	}
+	if cmd == nil {
+		t.Error("no command after clicking the box")
+	}
+
 	m, _ = m.Update(click(margin+at, l.Filters.Y))
 	if got := m.SelectedIn(0); len(got) != 0 {
 		t.Errorf("SelectedIn(0) = %v after clicking again, want none of it", got)

@@ -80,6 +80,18 @@ const Chevron = "›"
 // stays invisible until you notice something missing from the screen.
 const Bullet = "•"
 
+// A group's checkbox, in its three states: every option in the group, some of
+// them, none of them.
+//
+// Three glyphs rather than two, because "some" is the state a group spends most
+// of its life in, and drawing it as either of the others makes one click do
+// something different from what the box appeared to promise.
+const (
+	BoxAll  = "■"
+	BoxSome = "▪"
+	BoxNone = "□"
+)
+
 // Magnifier marks the search field, in place of a label saying "search".
 //
 // U+2315 rather than the 🔍 emoji or a nerd-font glyph: the emoji is two cells

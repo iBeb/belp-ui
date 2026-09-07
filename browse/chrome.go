@@ -314,12 +314,17 @@ func (c Chrome) filterBar(labels bool) (string, []span) {
 			write(s.Rule.Render(groupGap))
 		}
 		if labels && g.Label != "" && !g.Menu {
-			// Bold: dimmed alone, the name of a filter read as one of its values.
-			name := s.Heading.Render(g.Label)
-			if !g.Exclusive {
-				spans = append(spans, span{group: gi, label: true, x0: x, x1: x + lipgloss.Width(name)})
+			// A group that can be taken whole wears a checkbox; one that cannot
+			// — a date range — is only ever a name. Bold either way: dimmed
+			// alone, the name of a filter reads as one of its values.
+			if g.Exclusive {
+				write(s.Heading.Render(g.Label) + " ")
+			} else {
+				box := c.groupBox(g)
+				spans = append(spans, span{group: gi, option: boxOption, label: true,
+					x0: x, x1: x + lipgloss.Width(box)})
+				write(box + " ")
 			}
-			write(name + " ")
 		}
 		if g.Menu {
 			chip := c.menuChip(g)
@@ -350,6 +355,36 @@ func (c Chrome) filterBar(labels bool) (string, []span) {
 		}
 	}
 	return b.String(), spans
+}
+
+// boxOption is the option index a group's own checkbox answers to. Not one of
+// the options: it is the group.
+const boxOption = -1
+
+// groupBox is the group's checkbox and name: what the whole group is set to, and
+// the one place to set all of it or none of it.
+func (c Chrome) groupBox(g Group) string {
+	s := c.Styles
+	on := 0
+	for _, o := range g.Options {
+		if o.Selected {
+			on++
+		}
+	}
+
+	style, mark := s.Desc, theme.BoxNone
+	switch {
+	case len(g.Options) > 0 && on == len(g.Options):
+		style, mark = s.Selected, theme.BoxAll
+	case on > 0:
+		style, mark = s.Selected, theme.BoxSome
+	}
+
+	open, close := " ", " "
+	if g.Focused && c.Focus == FocusFilters {
+		open, close = "[", "]"
+	}
+	return style.Render(open + mark + " " + g.Label + close)
 }
 
 // menuChip is a whole group in one chip: the marker, and how many of it are on.

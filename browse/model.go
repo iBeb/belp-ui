@@ -284,17 +284,13 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		// And clicking a chip is the same as arrowing onto it and pressing
 		// space: the cursor goes there, then the chip answers.
 		if sp, ok := m.chipAt(msg.X, l); ok {
-			// The name, rather than a chip: all of it on, or all of it off.
-			// Toggling suits a pointing gesture — one target, and the state is
-			// visible in the chips beside it.
-			if sp.label {
-				m.group = sp.group
-				if m.setGroup(sp.group, !m.groupIsAllOn(sp.group)) {
-					return m, func() tea.Msg { return FiltersChangedMsg{} }
-				}
-				return m, nil
-			}
 			m.group, m.option = sp.group, sp.option
+			// The checkbox is a chip like any other as far as a click goes: the
+			// cursor lands on it and it answers.
+			if sp.label {
+				m.toggleChip()
+				return m, func() tea.Msg { return FiltersChangedMsg{} }
+			}
 			if sp.menu {
 				m.chrome.Focus, m.option = FocusMenu, 0
 				return m, nil
@@ -704,6 +700,11 @@ func (m *Model) toggleChip() {
 	if m.group >= len(m.chrome.Groups) {
 		return
 	}
+	// The group's own checkbox: full becomes empty, anything else becomes full.
+	if m.option == boxOption {
+		m.setGroup(m.group, !m.groupIsAllOn(m.group))
+		return
+	}
 	groups := make([]Group, len(m.chrome.Groups))
 	copy(groups, m.chrome.Groups)
 
@@ -767,6 +768,11 @@ func (m Model) flatChips() []chipAt {
 			out = append(out, chipAt{g, m.option})
 			continue
 		}
+		// The checkbox comes first, where it is drawn: the whole group, then
+		// its parts.
+		if group.Label != "" && !group.Exclusive {
+			out = append(out, chipAt{g, boxOption})
+		}
 		for o := range group.Options {
 			out = append(out, chipAt{g, o})
 		}
@@ -829,7 +835,9 @@ func (m Model) groupsWithCursor() []Group {
 		groups[g] = group
 		// A menu holds the cursor as a group: its chip is one, whatever is
 		// inside, and inside is where m.option is pointing once it is open.
-		groups[g].Focused = group.Menu && g == m.group
+		// A group's own chip — its menu, or its checkbox — carries the cursor as
+		// the group rather than as one of the options.
+		groups[g].Focused = g == m.group && (group.Menu || m.option == boxOption)
 		groups[g].Options = make([]Option, len(group.Options))
 		for o, opt := range group.Options {
 			opt.Focused = g == m.group && o == m.option
