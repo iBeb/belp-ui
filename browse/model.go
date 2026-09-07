@@ -856,7 +856,11 @@ func (m Model) rows(l Layout) []string {
 		// Nothing is selected while the focus is elsewhere: a highlighted row
 		// under a focused search field claims a cursor that is not there.
 		selected := i == m.cursor && m.chrome.Focus == FocusList
-		out = append(out, m.Row(i, l.Width, selected))
+		// The width the row actually has: one column of air on the right, to
+		// match the one the marker leaves on the left. Handed the full width, a
+		// row that right-aligns anything puts it against the last column while
+		// every other band stops short of it.
+		out = append(out, m.Row(i, l.Width-margin, selected))
 	}
 	return out
 }

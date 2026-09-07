@@ -206,8 +206,8 @@ func (c Chrome) Render(l Layout, rows, preview []string) string {
 	put(l.HeaderRule, c.Rule(l.Width))
 	put(l.Filters, inset(c.Filters(l.Width-2*margin))...)
 	put(l.Search, c.SearchBox(l.Width)...)
-	put(l.Columns, fit(c.Columns, l.Width))
-	put(l.List, fitAll(rows, l.List.Height, l.Width)...)
+	put(l.Columns, fit(c.Columns, l.Width-margin))
+	put(l.List, fitAll(rows, l.List.Height, l.Width-margin)...)
 	put(l.PreviewRule, c.Rule(l.Width))
 	put(l.Preview, inset(fitAll(preview, l.Preview.Height, l.Width-2*margin)...)...)
 	// The hints are the list's, and while a question is open none of them are
