@@ -82,7 +82,7 @@ func render(darkBG bool) string {
 		s.Rule.Render(strings.Repeat("─", 38)),
 		s.Heading.Render("Apps"),
 		"  " + s.Item.Render("Recall") + "  " + s.Desc.Render("find a session"),
-		s.Selected.Render("▸ Stack") + "  " + s.Desc.Render("the docker stack"),
+		s.Selected.Render("  Stack") + "  " + s.Selected.Render("the docker stack"),
 		"",
 		s.Label.Render("     Branch ") + s.Value.Render("main"),
 		s.Success.Render("moved") + " " + s.Warn.Render("running") + " " + s.Danger.Render("removed"),

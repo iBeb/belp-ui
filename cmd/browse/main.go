@@ -121,7 +121,7 @@ func rows(s theme.Styles, n, width int) []string {
 		r := sample[i%len(sample)]
 		style, marker := s.Item, "  "
 		if i == 3 { // the row the cursor is on
-			style, marker = s.Selected, "▸ "
+			style, marker = s.Selected, "  "
 		}
 		out = append(out,
 			marker+
