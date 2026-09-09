@@ -67,6 +67,16 @@ type Group struct {
 	// an exclusive group has no answer.
 	Exclusive bool
 
+	// Plain keeps the label a name rather than a control.
+	//
+	// A labelled group is otherwise offered whole: it wears a checkbox, and
+	// clicking it lights or clears every chip at once. That is right where the
+	// members add up — five colleagues and a sixth — and wrong where each member
+	// narrows on its own, because "all of them" is then an intersection nobody
+	// asked for. The name still earns its place: it says what the chips beside it
+	// are answers to.
+	Plain bool
+
 	// Menu collapses the group to a single chip that opens a list.
 	//
 	// For a set whose members are data rather than design: colleagues, projects,
@@ -317,7 +327,7 @@ func (c Chrome) filterBar(labels bool) (string, []span) {
 			// A group that can be taken whole wears a checkbox; one that cannot
 			// — a date range — is only ever a name. Bold either way: dimmed
 			// alone, the name of a filter reads as one of its values.
-			if g.Exclusive {
+			if g.Exclusive || g.Plain {
 				write(s.Heading.Render(g.Label) + " ")
 			} else {
 				box := c.groupBox(g)

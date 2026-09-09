@@ -1544,3 +1544,39 @@ func TestGroupShortcutsStillSelectAWholeGroup(t *testing.T) {
 		t.Errorf("query = %q, want %q — untouched while the chips have the focus", q, before)
 	}
 }
+
+// A plain group keeps its name and loses the control: the label says what the
+// chips answer, and nothing offers to take the group whole — which for chips
+// that each narrow would mean an intersection nobody asked for.
+func TestAPlainGroupLabelIsNotAChip(t *testing.T) {
+	plain := New(Chrome{Groups: []Group{
+		{Label: "show", Plain: true, Options: []Option{{Label: "live"}, {Label: "empty"}}},
+	}})
+	boxed := New(Chrome{Groups: []Group{
+		{Label: "show", Options: []Option{{Label: "live"}, {Label: "empty"}}},
+	}})
+
+	// One stop per chip, with no extra stop for the group itself.
+	if got, want := len(plain.flatChips()), 2; got != want {
+		t.Errorf("plain group has %d stops, want %d", got, want)
+	}
+	if got, want := len(boxed.flatChips()), 3; got != want {
+		t.Errorf("labelled group has %d stops, want %d — the checkbox is one", got, want)
+	}
+
+	// And nothing can set or clear it wholesale.
+	if plain.setGroup(0, true) {
+		t.Error("setGroup lit a plain group")
+	}
+	for _, o := range plain.chrome.Groups[0].Options {
+		if o.Selected {
+			t.Errorf("%q ended up selected", o.Label)
+		}
+	}
+
+	// The label is still drawn: it is a name, not a control.
+	plain.width, plain.height = 80, 20
+	if view := plain.View(); !strings.Contains(view, "show") {
+		t.Error("the label is gone from the bar")
+	}
+}

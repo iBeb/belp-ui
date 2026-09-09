@@ -671,7 +671,7 @@ func (m *Model) moveInMenu(delta int) {
 // is not an answer — and copy on write for the same reason toggleChip is: a
 // Model travels by value and several copies share one backing array.
 func (m *Model) setGroup(g int, all bool) bool {
-	if g >= len(m.chrome.Groups) || m.chrome.Groups[g].Exclusive {
+	if g >= len(m.chrome.Groups) || m.chrome.Groups[g].Exclusive || m.chrome.Groups[g].Plain {
 		return false
 	}
 	groups := make([]Group, len(m.chrome.Groups))
@@ -786,7 +786,7 @@ func (m Model) flatChips() []chipAt {
 		}
 		// The checkbox comes first, where it is drawn: the whole group, then
 		// its parts.
-		if group.Label != "" && !group.Exclusive {
+		if group.Label != "" && !group.Exclusive && !group.Plain {
 			out = append(out, chipAt{g, boxOption})
 		}
 		for o := range group.Options {
