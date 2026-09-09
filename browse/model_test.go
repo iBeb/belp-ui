@@ -24,6 +24,19 @@ func model(rows int) Model {
 	}
 	m.SetSize(100, 30)
 	m.SetRowCount(rows)
+	// A screen opens with the search field focused. These tests are about the
+	// list, so they say so rather than relying on where the focus happens to
+	// start — which is the thing TestFocusStartsInTheSearchField checks.
+	m, _ = press(m, "down")
+	return m
+}
+
+// launched is a screen exactly as it opens, for the tests that are about that.
+func launched(rows int) Model {
+	m := New(sample())
+	m.Row = func(i, _ int, selected bool) string { return fmt.Sprintf("row%d", i) }
+	m.SetSize(100, 30)
+	m.SetRowCount(rows)
 	return m
 }
 
@@ -72,12 +85,17 @@ func press(m Model, keys ...string) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// The list has the focus to begin with. A list you have to click into before the
-// arrows work is a list that feels broken.
-func TestFocusStartsOnTheList(t *testing.T) {
-	m := model(10)
-	if m.Focus() != FocusList {
-		t.Errorf("Focus() = %v, want FocusList", m.Focus())
+// The search field has the focus to begin with.
+//
+// The first thing anyone does with a list of everything is narrow it, so typing
+// is the first step rather than the second: no click, no arrow, just type. The
+// cost is that no row is highlighted until the list is stepped into, which is
+// right — a highlighted row under a focused field claims a cursor that is not
+// there.
+func TestFocusStartsInTheSearchField(t *testing.T) {
+	m := launched(10)
+	if m.Focus() != FocusSearch {
+		t.Errorf("Focus() = %v, want the search field", m.Focus())
 	}
 	if m.Cursor() != 0 {
 		t.Errorf("Cursor() = %d, want 0", m.Cursor())
@@ -278,7 +296,7 @@ func TestEnterOnTheSearchFieldDropsIntoTheListAndSubmits(t *testing.T) {
 	m.chrome.Query = "geo"
 	m, cmd := press(m, "enter")
 	if m.Focus() != FocusList {
-		t.Errorf("Focus() = %v, want FocusList", m.Focus())
+		t.Errorf("Focus() = %v, want the search field", m.Focus())
 	}
 	if cmd == nil {
 		t.Fatal("Enter in the search field produced no command")
@@ -755,7 +773,7 @@ func TestClickSelectsTheRowUnderThePointer(t *testing.T) {
 
 	m, _ = m.Update(click(10, l.List.Y+4))
 	if m.Focus() != FocusList {
-		t.Errorf("Focus() = %v, want FocusList", m.Focus())
+		t.Errorf("Focus() = %v, want the search field", m.Focus())
 	}
 	if m.Cursor() != 4 {
 		t.Errorf("Cursor() = %d, want 4", m.Cursor())

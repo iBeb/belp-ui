@@ -115,6 +115,10 @@ type Model struct {
 // you with text already in it is one you are meant to add to, not overwrite.
 func New(c Chrome) Model {
 	c.Caret = len([]rune(c.Query))
+	// The search field has the focus to begin with: the first thing anyone does
+	// with a list of everything is narrow it, and a field you have to reach for
+	// first makes typing the second step rather than the first.
+	c.Focus = FocusSearch
 	return Model{chrome: c}
 }
 
