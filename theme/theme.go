@@ -173,3 +173,28 @@ func New(p Palette) Styles {
 
 // Default is what an app uses when it has no reason to customise.
 func Default() Styles { return New(DefaultPalette()) }
+
+// ForRow returns the styles a list row draws with.
+//
+// Selected, every part of it takes the accent. A row picked out in one place
+// and not another reads as two rows: the eye follows the colour, so a blue
+// title beside a grey date and a green dot says the title is the selection
+// rather than the line. Nothing in a row is worth more than knowing which row
+// you are on, so while it is selected the row says only that.
+//
+// The semantic colours go with it, which is the cost: a failing thing on the
+// selected row is blue like everything else on that row, and says what it is
+// through its own text and through the preview below.
+func (s Styles) ForRow(selected bool) Styles {
+	if !selected {
+		return s
+	}
+	for _, f := range []*lipgloss.Style{
+		&s.Item, &s.Desc, &s.Label, &s.Value,
+		&s.Success, &s.Warn, &s.Danger,
+		&s.Begun, &s.Flight, &s.Spent, &s.Voice, &s.Judge,
+	} {
+		*f = s.Selected
+	}
+	return s
+}

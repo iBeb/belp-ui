@@ -95,3 +95,45 @@ func TestStylesCarryNoLayout(t *testing.T) {
 		}
 	}
 }
+
+// A selected row is one colour throughout. The eye follows colour, so a row
+// coloured in one place and not another reads as two rows.
+func TestForRowPaintsTheWholeRow(t *testing.T) {
+	s := Default().ForRow(true)
+	accent := DefaultPalette().Accent
+
+	v := reflect.ValueOf(s)
+	// Everything a row draws with. Chrome styles are not a row's business and
+	// are left alone, which is why this is a list rather than every field.
+	for _, name := range []string{
+		"Item", "Desc", "Label", "Value",
+		"Success", "Warn", "Danger",
+		"Begun", "Flight", "Spent", "Voice", "Judge",
+	} {
+		style, ok := v.FieldByName(name).Interface().(lipgloss.Style)
+		if !ok {
+			t.Fatalf("%s is not a Style; the test needs updating", name)
+		}
+		if got := style.GetForeground(); got != accent {
+			t.Errorf("%s renders in %v on a selected row, want the accent %v", name, got, accent)
+		}
+	}
+}
+
+// And an unselected row is left exactly as it was: ForRow is not a way to
+// recolour a screen by accident.
+func TestForRowLeavesAnUnselectedRowAlone(t *testing.T) {
+	plain, same := Default(), Default().ForRow(false)
+	v1, v2 := reflect.ValueOf(plain), reflect.ValueOf(same)
+	for i := 0; i < v1.NumField(); i++ {
+		f := v1.Type().Field(i)
+		if f.Type != reflect.TypeOf(lipgloss.Style{}) {
+			continue
+		}
+		a := v1.Field(i).Interface().(lipgloss.Style)
+		b := v2.Field(i).Interface().(lipgloss.Style)
+		if a.GetForeground() != b.GetForeground() || a.GetBold() != b.GetBold() {
+			t.Errorf("%s changed for an unselected row", f.Name)
+		}
+	}
+}
