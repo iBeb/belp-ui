@@ -533,6 +533,10 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.chrome.Focus == FocusSearch {
 			m.chrome.Query, m.chrome.Caret = backspaceAt(m.chrome.Query, m.chrome.Caret)
 		}
+	case "delete":
+		if m.chrome.Focus == FocusSearch {
+			m.chrome.Query, m.chrome.Caret = deleteAt(m.chrome.Query, m.chrome.Caret)
+		}
 	case "ctrl+w":
 		if m.chrome.Focus == FocusSearch {
 			m.chrome.Query, m.chrome.Caret = dropWordAt(m.chrome.Query, m.chrome.Caret)
@@ -616,6 +620,8 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		text, caret = dropWordAt(text, caret)
 	case "backspace":
 		text, caret = backspaceAt(text, caret)
+	case "delete":
+		text, caret = deleteAt(text, caret)
 
 	default:
 		// Space arrives as a rune here rather than as the list's Enter-alike:
@@ -920,6 +926,18 @@ func backspaceAt(text string, caret int) (string, int) {
 		return text, caret
 	}
 	return string(r[:len(r)-1]) + tail, len(r) - 1
+}
+
+// deleteAt removes the character the cursor is sitting on and leaves the cursor
+// where it is, so a held key eats the line rightwards. Nothing happens at the
+// end of the text: there is nothing under the cursor there.
+func deleteAt(text string, caret int) (string, int) {
+	head, tail := split(text, caret)
+	r := []rune(tail)
+	if len(r) == 0 {
+		return text, caret
+	}
+	return head + string(r[1:]), len([]rune(head))
 }
 
 // dropWordAt removes the word before the cursor and keeps what follows it.
