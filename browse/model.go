@@ -307,6 +307,12 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 	// refusing the focus.
 	case !l.Search.Empty() && y >= l.Search.Y && y <= l.Search.Bottom():
 		m.chrome.Focus = FocusSearch
+		// On the line the text is drawn on, the click also says where in the
+		// text: a field that takes the focus but leaves the cursor where it was
+		// makes you walk it back with the arrows to edit what you pointed at.
+		if y == l.Search.Y+1 {
+			m.chrome.Caret = m.chrome.CaretAt(msg.X, l.Width)
+		}
 	case y >= l.List.Y && y <= l.List.Bottom():
 		if i := m.top + (y - l.List.Y); i < m.count {
 			m.chrome.Focus = FocusList

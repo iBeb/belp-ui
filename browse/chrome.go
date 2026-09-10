@@ -492,7 +492,7 @@ func (c Chrome) Search(width int) string {
 		prompt = s.Selected.Render(theme.Magnifier)
 	}
 
-	room := width - 2 // the magnifier and the space after it
+	room := width - promptW
 	if room < 1 {
 		return fit(prompt, width)
 	}
@@ -611,13 +611,7 @@ func window(n, follow, room int) (start, end int, cutLeft, cutRight bool) {
 // The margin either side matches the filter bar above it, so the two left edges
 // line up rather than stepping.
 func (c Chrome) SearchBox(width int) []string {
-	// Width on a lipgloss style counts the padding and not the border: measured,
-	// the border's two columns are added outside it. Subtracting the padding
-	// here as well made the box two columns narrower than the width it was
-	// given, so it stopped short of the edge every other band reaches.
-	inner := width - 2*margin - 2
-	// What is left for the text once the padding inside the border is taken.
-	text := inner - 2*margin
+	inner, text, _ := searchGeom(width)
 	if text < 1 {
 		// No room to be a box. The field alone is still worth having: it says
 		// what has been typed, which is the part nothing else on screen says.
@@ -636,6 +630,51 @@ func (c Chrome) SearchBox(width int) []string {
 		Render(c.Search(text))
 
 	return inset(strings.Split(box, "\n")...)
+}
+
+// promptW is the magnifier and the space after it, which sit before the query.
+const promptW = 2
+
+// searchGeom is the geometry of the search box: the width to set on the style,
+// the cells the query line is drawn into, and the column its first cell lands
+// in.
+//
+// One function, because the box, the text inside it and a click on that text
+// each need these numbers and any two of them disagreeing is a caret that lands
+// on the wrong character.
+//
+// Width on a lipgloss style counts the padding and not the border: measured,
+// the border's two columns are added outside it. Subtracting the padding here
+// as well made the box two columns narrower than the width it was given.
+func searchGeom(width int) (inner, text, textX int) {
+	inner = width - 2*margin - 2
+	text = inner - 2*margin
+	// The inset margin, the border, the padding, then the magnifier and its
+	// space: everything drawn before the first character of the query.
+	return inner, text, margin + 1 + margin + promptW
+}
+
+// CaretAt is where a click at column x puts the cursor in the query.
+//
+// Read off the same window the text is drawn through, so a click lands on the
+// character under the pointer even when the field has scrolled and is showing
+// an ellipsis in place of what is off the left.
+func (c Chrome) CaretAt(x, width int) int {
+	r := []rune(c.Query)
+	_, text, textX := searchGeom(width)
+	room := text - promptW
+	if room < 1 {
+		return len(r)
+	}
+
+	// The caret can sit one past the last character, and typed draws that extra
+	// cell, so the window is computed over one more cell than there is text.
+	start, _, cutLeft, _ := window(len(r)+1, clamp(c.Caret, 0, len(r)), room)
+	col := x - textX
+	if cutLeft {
+		col-- // the ellipsis stands where a character would be
+	}
+	return clamp(start+col, 0, len(r))
 }
 
 // Footer is the key hints.
