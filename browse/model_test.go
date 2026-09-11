@@ -338,14 +338,23 @@ func TestEnterOnAnEmptyListDoesNothing(t *testing.T) {
 }
 
 // Quitting is the app's decision; the component only reports the key.
-func TestCtrlQAndCtrlCAskToQuit(t *testing.T) {
-	for _, k := range []string{"ctrl+q", "ctrl+c"} {
-		_, cmd := press(model(10), k)
-		if cmd == nil {
-			t.Fatalf("%s produced no command", k)
-		}
-		if _, ok := cmd().(QuitMsg); !ok {
-			t.Errorf("%s gave %T, want QuitMsg", k, cmd())
+func TestControlCAsksToQuitAndNothingElseDoes(t *testing.T) {
+	_, cmd := press(model(10), "ctrl+c")
+	if cmd == nil {
+		t.Fatal("^C produced no command")
+	}
+	if _, ok := cmd().(QuitMsg); !ok {
+		t.Errorf("^C gave %T, want QuitMsg", cmd())
+	}
+
+	// Not ^Q: whether it survives depends on the terminal rather than the app,
+	// and a way out that works sometimes is worse than one way that always does.
+	// Not Esc: it is kept for backing out of a field or an overlay.
+	for _, k := range []string{"ctrl+q", "esc"} {
+		if _, cmd := press(model(10), k); cmd != nil {
+			if _, quits := cmd().(QuitMsg); quits {
+				t.Errorf("%s quit the app", k)
+			}
 		}
 	}
 }
@@ -900,7 +909,7 @@ func TestAskEditsItsOwnText(t *testing.T) {
 }
 
 // Esc is free for this precisely because quitting is not spent on it.
-func TestEscAbandonsTheQuestionAndCtrlQStillQuits(t *testing.T) {
+func TestEscAbandonsTheQuestionAndControlCStillQuits(t *testing.T) {
 	m := model(10)
 	m, _ = press(m, "up") // the search field, so the focus has somewhere to return to
 	m.Ask("move to: ", "")
@@ -921,8 +930,8 @@ func TestEscAbandonsTheQuestionAndCtrlQStillQuits(t *testing.T) {
 	}
 
 	m.Ask("title: ", "")
-	if _, cmd := press(m, "ctrl+q"); cmd == nil {
-		t.Fatal("^Q under an open question produced no command")
+	if _, cmd := press(m, "ctrl+c"); cmd == nil {
+		t.Fatal("^C under an open question produced no command")
 	} else if _, ok := cmd().(QuitMsg); !ok {
 		t.Errorf("cmd() = %T, want QuitMsg — a modal you cannot quit out of is a trap", cmd())
 	}
@@ -1078,10 +1087,10 @@ func TestConfirmWindowAnswersOnlyToYesAndNo(t *testing.T) {
 }
 
 // ^Q still works: a modal you cannot quit out of is a trap.
-func TestCtrlQClosesTheProgramFromAConfirmWindow(t *testing.T) {
+func TestControlCClosesTheProgramFromAConfirmWindow(t *testing.T) {
 	m := model(10)
 	m.AskConfirm("live", Confirm{Question: "Resume a running session?"})
-	_, cmd := press(m, "ctrl+q")
+	_, cmd := press(m, "ctrl+c")
 	if _, ok := cmd().(QuitMsg); !ok {
 		t.Errorf("cmd() = %T, want QuitMsg", cmd())
 	}

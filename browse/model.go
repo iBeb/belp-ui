@@ -70,7 +70,7 @@ type ConfirmedMsg struct{ Label string }
 // be struck by reflex.
 type DismissedMsg struct{ Label string }
 
-// QuitMsg is Esc or ^C.
+// QuitMsg is ^C, which is the one way out and the same in every app.
 //
 // A message rather than tea.Quit: whether those keys end the program is the
 // app's decision, and a component that quits on its own cannot be embedded in
@@ -393,13 +393,15 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	// ^Q and ^C, never Esc. Esc is too useful inside an app — backing out of a
-	// field, cancelling an overlay — to spend on the one action you cannot undo,
-	// and it is one stray keypress away at all times.
+	// ^C, and only ^C. Never Esc: it is too useful inside an app — backing out
+	// of a field, closing an overlay — to spend on the one action that cannot be
+	// undone, and it is one stray keypress away at all times.
 	//
-	// ^Q is XON, which a cooked terminal eats before an app sees it. Bubbletea
-	// puts the terminal in raw mode, which clears IXON, so it arrives.
-	case "ctrl+q", "ctrl+c":
+	// Not ^Q either. It is XON, and whether it survives depends on the terminal
+	// rather than on the app, so a footer that offers it is offering something
+	// that may do nothing. One key that always works is worth more than two
+	// where the second is a maybe.
+	case "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
 	// Backing out of an overlay is exactly what Esc is kept for. It closes the
@@ -576,7 +578,7 @@ func (m *Model) typeKey(msg tea.KeyMsg) {
 func (m Model) confirm(msg tea.KeyMsg) (Model, tea.Cmd) {
 	label := m.confirming
 	switch msg.String() {
-	case "ctrl+q", "ctrl+c":
+	case "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 	case "y", "Y":
 		m.close()
@@ -599,7 +601,7 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	text, caret := m.chrome.Prompt.Text, m.chrome.Prompt.Caret
 
 	switch msg.String() {
-	case "ctrl+q", "ctrl+c":
+	case "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
 	case "enter":
