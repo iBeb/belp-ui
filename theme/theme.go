@@ -83,9 +83,13 @@ func DefaultPalette() Palette {
 type Styles struct {
 	Palette Palette
 
-	App      lipgloss.Style // the app's own name, in a header
-	Crumb    lipgloss.Style // where you are within it
-	Chevron  lipgloss.Style // between crumbs
+	App   lipgloss.Style // the app's own name, in a header
+	Crumb lipgloss.Style // where you are within it
+	// Chevron separates the crumbs. Drawn as the words are, not fainter: it is
+	// part of the phrase rather than a rule between two things, and a separator
+	// pale enough to disappear leaves two words sitting next to each other for
+	// no reason anyone can see.
+	Chevron  lipgloss.Style
 	Heading  lipgloss.Style // a group heading
 	Item     lipgloss.Style
 	Selected lipgloss.Style
@@ -156,7 +160,7 @@ func New(p Palette) Styles {
 		Palette:  p,
 		App:      fg(p.Accent).Bold(true),
 		Crumb:    fg(p.Text),
-		Chevron:  fg(p.Faint),
+		Chevron:  fg(p.Text),
 		Heading:  fg(p.Dim).Bold(true),
 		Item:     fg(p.Text),
 		Selected: fg(p.Accent).Bold(true),
