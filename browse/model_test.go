@@ -1589,3 +1589,42 @@ func TestAPlainGroupLabelIsNotAChip(t *testing.T) {
 		t.Error("the label is gone from the bar")
 	}
 }
+
+// Only one panel should look like the one being typed into. An app in a grid is
+// told when the keys have gone elsewhere, and draws itself a step quieter until
+// they come back.
+func TestBlurDrawsQuieterAndFocusRestoresIt(t *testing.T) {
+	m := model(10)
+	awake := m.chrome.Styles
+
+	m, _ = m.Update(tea.BlurMsg{})
+	rested := m.chrome.Styles
+	if rested.Palette.Accent == awake.Palette.Accent {
+		t.Error("a blurred app still paints its selected row in the live accent")
+	}
+	if rested.Palette.Text == awake.Palette.Text {
+		t.Error("a blurred app still paints its text at full strength")
+	}
+	// What a colour means does not change with the focus: a red dimmed until it
+	// reads as grey has stopped saying what red says.
+	if rested.Palette.Danger != awake.Palette.Danger {
+		t.Error("blurring changed what danger looks like")
+	}
+
+	m, _ = m.Update(tea.FocusMsg{})
+	if m.chrome.Styles.Palette.Accent != awake.Palette.Accent {
+		t.Error("the app did not come back to life when the keys returned")
+	}
+}
+
+// Blurring is about how it is drawn and nothing else: the cursor stays where it
+// was, so coming back does not mean finding your place again.
+func TestBlurChangesNothingButTheColours(t *testing.T) {
+	m := model(10)
+	m.cursor, m.chrome.Focus = 4, FocusList
+
+	m, _ = m.Update(tea.BlurMsg{})
+	if m.cursor != 4 || m.chrome.Focus != FocusList {
+		t.Errorf("blur moved the cursor to %d in band %v", m.cursor, m.chrome.Focus)
+	}
+}

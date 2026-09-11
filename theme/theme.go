@@ -20,6 +20,12 @@ type Palette struct {
 	Accent lipgloss.AdaptiveColor // the selected or focused thing
 	Key    lipgloss.AdaptiveColor // key names in a status bar
 
+	// Resting is Accent for an app that is not the one being typed into: the
+	// same blue with the life taken out of it. A selected row still has to read
+	// as selected — you want to see where you left it — without competing with
+	// the panel that actually has the keys.
+	Resting lipgloss.AdaptiveColor
+
 	Success lipgloss.AdaptiveColor
 	Warn    lipgloss.AdaptiveColor
 	Danger  lipgloss.AdaptiveColor // destructive and irreversible
@@ -55,6 +61,7 @@ func DefaultPalette() Palette {
 		Dim:     lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#dcdcdc"},
 		Faint:   lipgloss.AdaptiveColor{Light: "#c6c6c6", Dark: "#3a3a3a"},
 		Accent:  lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
+		Resting: lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
 		Key:     lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
 		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
 		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
@@ -173,6 +180,24 @@ func New(p Palette) Styles {
 
 // Default is what an app uses when it has no reason to customise.
 func Default() Styles { return New(DefaultPalette()) }
+
+// AtRest is this palette as an app draws itself when the keys are somewhere
+// else: the text a step quieter and the accent greyed.
+//
+// The colours that carry a meaning are left alone. A red dimmed until it reads
+// as grey has stopped saying what red says, and a panel you are not typing into
+// is still a panel whose broken service you want to notice.
+func (p Palette) AtRest() Palette {
+	q := p
+	q.Text = p.Dim
+	q.Dim = p.Faint
+	q.Key = p.Faint
+	q.Accent = p.Resting
+	return q
+}
+
+// AtRest is these styles, drawn for an app whose keys are elsewhere.
+func (s Styles) AtRest() Styles { return New(s.Palette.AtRest()) }
 
 // ForRow returns the styles a list row draws with.
 //

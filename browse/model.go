@@ -3,6 +3,8 @@ package browse
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/iBeb/belp-ui/theme"
 )
 
 // RowFunc renders row i to at most width cells, told whether the cursor is on it
@@ -80,6 +82,12 @@ type QuitMsg struct{}
 // Model is an interactive browse screen: a filter bar, a search field, a list
 // and a preview, with one way of moving between them.
 type Model struct {
+	// awake and resting are the two ways this draws: the app that has the keys,
+	// and an app that has not. Kept here rather than worked out each time so
+	// that an app which set its own styles keeps them.
+	awake   theme.Styles
+	resting theme.Styles
+
 	// Row and Preview are how the app draws itself. A nil Row draws nothing,
 	// which is what an app with no results looks like.
 	Row     RowFunc
@@ -119,7 +127,7 @@ func New(c Chrome) Model {
 	// with a list of everything is narrow it, and a field you have to reach for
 	// first makes typing the second step rather than the first.
 	c.Focus = FocusSearch
-	return Model{chrome: c}
+	return Model{chrome: c, awake: c.Styles, resting: c.Styles.AtRest()}
 }
 
 // SetRowCount tells the model how many rows there are now.
@@ -237,6 +245,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m.key(msg)
 	case tea.MouseMsg:
 		return m.mouse(msg)
+
+	// An app in a grid is told when the keys have gone somewhere else, and draws
+	// itself a step quieter for as long as they are. Only one panel should look
+	// like the one being typed into, and the terminal is what knows which.
+	case tea.BlurMsg:
+		m.chrome.Styles = m.resting
+		return m, nil
+	case tea.FocusMsg:
+		m.chrome.Styles = m.awake
+		return m, nil
 	}
 	return m, nil
 }
