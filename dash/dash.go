@@ -324,36 +324,71 @@ func Pairs(s theme.Styles, pairs []Pair, width int) []string {
 	return out
 }
 
-// Meter is a proportion drawn as a bar.
+// Gauge is a proportion drawn as a filled bar with its own figure inside it.
 //
-// Filled and unfilled blocks rather than a percentage: the question a bar
-// answers is "nearly all, or hardly any", and a number makes the eye read
-// before it can tell.
-func Meter(s theme.Styles, done, total, width int) string {
+// Backgrounds rather than block characters, and the label knocked through them
+// rather than written beside them. A card gives this about a dozen cells: ten of
+// twelve containers cannot be drawn as ten rectangles in that, and a figure
+// sitting outside the bar spends a third of what is left saying what the bar is
+// already for.
+type Gauge struct {
+	Done, Total int
+	// Label goes inside the bar. Empty draws a bar with nothing in it.
+	Label string
+	// Tone overrides the colour the proportion would choose, for a bar that is
+	// empty because nothing could be read rather than because nothing is up.
+	Tone Tone
+}
+
+// Render draws the gauge at a width.
+func (g Gauge) Render(s theme.Styles, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	style := s.Desc
-	switch {
-	case total > 0 && done >= total:
-		style = s.Success
-	case done > 0:
-		style = s.Warn
-	}
+	filled, track := g.colours(s)
+
 	full := 0
-	if total > 0 {
-		full = done * width / total
-		// Anything at all shows as something: a bar that rounds one container
-		// out of twelve down to empty says the service is down when it is not.
-		if full == 0 && done > 0 {
+	if g.Total > 0 {
+		full = g.Done * width / g.Total
+		// Anything at all shows as something: a bar that rounds one container out
+		// of twelve down to empty says the service is down when it is not.
+		if full == 0 && g.Done > 0 {
 			full = 1
 		}
-		if full > width {
-			full = width
-		}
+		full = min(full, width)
 	}
-	return style.Render(strings.Repeat("█", full)) +
-		s.Rule.Render(strings.Repeat("░", width-full))
+
+	// The label is centred over the whole bar and then cut where the fill ends,
+	// so the boundary runs through the text rather than the text choosing where
+	// the boundary may fall.
+	text := []rune(centre(cutTo(g.Label, width), width))
+	return filled.Render(string(text[:full])) + track.Render(string(text[full:]))
+}
+
+// colours are the two halves of the bar: what is done, and what is not.
+//
+// The figure is knocked out of the filled part in the terminal's own background
+// and written in ordinary text on the rest, so it stays legible wherever the
+// boundary happens to fall across it.
+func (g Gauge) colours(s theme.Styles) (filled, track lipgloss.Style) {
+	p := s.Palette
+	bar := p.Spent
+	switch {
+	case g.Tone != Plain:
+		bar = g.Tone.colour(p)
+	case g.Total > 0 && g.Done >= g.Total:
+		bar = p.Success
+	case g.Done > 0:
+		bar = p.Warn
+	}
+	filled = lipgloss.NewStyle().Background(bar).Foreground(p.Ground)
+	track = lipgloss.NewStyle().Background(p.Faint).Foreground(p.Text)
+	if g.Tone == Grave {
+		// Nothing to fill and something to say: the whole bar takes the colour,
+		// so an unreadable count does not look like a count of nothing.
+		track = lipgloss.NewStyle().Background(bar).Foreground(p.Ground)
+	}
+	return filled, track
 }
 
 func centre(label string, width int) string {

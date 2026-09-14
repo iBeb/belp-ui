@@ -1,6 +1,7 @@
 package dash
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -146,7 +147,7 @@ func TestPairsReflowAndStillLineUp(t *testing.T) {
 
 // A bar answers "nearly all, or hardly any" at a glance, and never rounds
 // something down to nothing.
-func TestTheMeterFillsInProportionAndNeverRoundsSomethingToNothing(t *testing.T) {
+func TestTheGaugeFillsInProportionAndNeverRoundsSomethingToNothing(t *testing.T) {
 	s := theme.Default()
 	for _, c := range []struct{ done, total, width, full int }{
 		{0, 10, 10, 0},
@@ -156,15 +157,72 @@ func TestTheMeterFillsInProportionAndNeverRoundsSomethingToNothing(t *testing.T)
 		{0, 0, 10, 0},
 		{12, 10, 10, 10}, // more than all of it is still all of it
 	} {
-		bar := plain(Meter(s, c.done, c.total, c.width))
+		g := Gauge{Done: c.done, Total: c.total}
+		bar := g.Render(s, c.width)
 		if got := lipgloss.Width(bar); got != c.width {
 			t.Errorf("%d/%d: bar is %d wide, want %d", c.done, c.total, got, c.width)
 		}
-		if got := strings.Count(bar, "█"); got != c.full {
-			t.Errorf("%d/%d in %d: %d blocks filled, want %d (%q)",
-				c.done, c.total, c.width, got, c.full, bar)
+		if got := filledCells(g, s, c.width); got != c.full {
+			t.Errorf("%d/%d in %d: %d cells filled, want %d",
+				c.done, c.total, c.width, got, c.full)
 		}
 	}
+}
+
+// The figure goes inside the bar, and stays there whole however far the fill has
+// reached across it — the boundary runs through the text, not around it.
+func TestTheGaugeCarriesItsFigureInside(t *testing.T) {
+	s := theme.Default()
+	for _, done := range []int{0, 1, 5, 9, 10} {
+		g := Gauge{Done: done, Total: 10, Label: "10/10"}
+		if got := plain(g.Render(s, 14)); !strings.Contains(got, "10/10") {
+			t.Errorf("%d/10: the figure is not in the bar: %q", done, got)
+		}
+		if got := lipgloss.Width(g.Render(s, 14)); got != 14 {
+			t.Errorf("%d/10: bar is %d wide, want 14", done, got)
+		}
+	}
+	// A bar too narrow for its figure says as much of it as it can rather than
+	// overflowing the card.
+	if got := lipgloss.Width(Gauge{Done: 1, Total: 2, Label: "100/100"}.Render(s, 4)); got != 4 {
+		t.Errorf("a narrow bar is %d wide, want 4", got)
+	}
+}
+
+// Both halves of the bar are painted: a track drawn as nothing is a bar whose
+// length you cannot see, which is half of what a bar says.
+func TestTheGaugePaintsItsTrackAsWellAsItsFill(t *testing.T) {
+	s := theme.Default()
+	empty := Gauge{Done: 0, Total: 10}.Render(s, 8)
+	if !strings.Contains(empty, background(s.Palette.Faint.Dark)) {
+		t.Errorf("an empty bar paints no track: %q", empty)
+	}
+	// An unreadable count takes the colour across the whole bar, so it does not
+	// look like a count of nothing.
+	grave := Gauge{Total: 0, Label: "unknown", Tone: Grave}.Render(s, 10)
+	if strings.Contains(grave, background(s.Palette.Faint.Dark)) {
+		t.Errorf("an unreadable bar draws an ordinary track: %q", grave)
+	}
+	if !strings.Contains(grave, background(s.Palette.Danger.Dark)) {
+		t.Errorf("an unreadable bar is not drawn in the colour that says so: %q", grave)
+	}
+}
+
+// filledCells is how many cells the fill covers, counted from where the style
+// changes rather than from the arithmetic under test.
+func filledCells(g Gauge, s theme.Styles, width int) int {
+	filled, _ := g.colours(s)
+	head := colourOf(filled)
+	bar := g.Render(s, width)
+	if !strings.HasPrefix(bar, head) {
+		return 0
+	}
+	rest := bar[len(head):]
+	end := strings.Index(rest, "\x1b")
+	if end < 0 {
+		end = len(rest)
+	}
+	return lipgloss.Width(rest[:end])
 }
 
 // A popup replaces what it covers: a terminal has no alpha, and a box you can
@@ -325,4 +383,12 @@ func colourOf(st lipgloss.Style) string {
 		return out[:i]
 	}
 	return ""
+}
+
+// background is the escape lipgloss writes for a background colour, so a test
+// can say which colour a run of cells was painted rather than how it looks.
+func background(hex string) string {
+	var r, g, b int
+	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
 }
