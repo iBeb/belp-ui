@@ -6,7 +6,11 @@
 // read as one product rather than several programs that share a terminal.
 package theme
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Palette is the colours, and only the colours.
 //
@@ -207,20 +211,65 @@ func New(p Palette) Styles {
 // Default is what an app uses when it has no reason to customise.
 func Default() Styles { return New(DefaultPalette()) }
 
-// AtRest is this palette as an app draws itself when the keys are somewhere
-// else: the text a step quieter and the accent greyed.
+// Rest is how far a resting palette moves toward the background: a light,
+// even hand.
 //
-// The colours that carry a meaning are left alone. A red dimmed until it reads
-// as grey has stopped saying what red says, and a panel you are not typing into
-// is still a panel whose broken service you want to notice.
+// One fraction for every colour, because the eye reads a panel as resting from
+// the fact that all of it went quiet together. Moving some colours a long way
+// and others hardly at all reads as a panel with something wrong on it rather
+// than one that is merely not in use.
+const Rest = 0.3
+
+// AtRest is this palette as an app draws itself when the keys are somewhere
+// else: every colour a fixed step toward the background.
+//
+// Toward the background rather than toward grey, so that what a colour means
+// survives the trip: a red at seven tenths is still plainly red, and a panel you
+// are not typing into is still one whose broken service you can see.
 func (p Palette) AtRest() Palette {
 	q := p
-	q.Text = p.Dim
-	q.Dim = p.Faint
-	q.Quiet = p.Faint
-	q.Key = p.Faint
-	q.Accent = p.Resting
+	for _, c := range []*AdaptiveColor{
+		&q.Text, &q.Dim, &q.Faint, &q.Quiet, &q.Accent, &q.Key, &q.Resting,
+		&q.Success, &q.Warn, &q.Danger,
+		&q.Begun, &q.Flight, &q.Spent, &q.Voice, &q.Judge,
+	} {
+		*c = fade(*c, p.Ground, Rest)
+	}
 	return q
+}
+
+// AdaptiveColor is lipgloss's, named here so the list above reads as one thing.
+type AdaptiveColor = lipgloss.AdaptiveColor
+
+// fade moves a colour that far toward the ground it is drawn on — the terminal's
+// own background, not pure black, or a dark theme's text would fade past where
+// the screen actually ends.
+//
+// A colour it cannot read is returned as it came. Every colour in this file is a
+// six-digit hex, so that is a guard rather than a case.
+func fade(c, ground AdaptiveColor, by float64) AdaptiveColor {
+	return AdaptiveColor{
+		Light: toward(c.Light, ground.Light, by),
+		Dark:  toward(c.Dark, ground.Dark, by),
+	}
+}
+
+func toward(hex, ground string, by float64) string {
+	r, g, b, ok := split(hex)
+	gr, gg, gb, okg := split(ground)
+	if !ok || !okg {
+		return hex
+	}
+	mix := func(v, to int) int { return int(float64(v) + (float64(to)-float64(v))*by) }
+	return fmt.Sprintf("#%02x%02x%02x", mix(r, gr), mix(g, gg), mix(b, gb))
+}
+
+func split(hex string) (r, g, b int, ok bool) {
+	if len(hex) != 7 || hex[0] != '#' {
+		return 0, 0, 0, false
+	}
+	n, err := fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return r, g, b, n == 3 && err == nil
 }
 
 // AtRest is these styles, drawn for an app whose keys are elsewhere.

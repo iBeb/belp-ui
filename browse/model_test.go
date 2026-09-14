@@ -1645,10 +1645,16 @@ func TestBlurDrawsQuieterAndFocusRestoresIt(t *testing.T) {
 	if rested.Palette.Text == awake.Palette.Text {
 		t.Error("a blurred app still paints its text at full strength")
 	}
-	// What a colour means does not change with the focus: a red dimmed until it
-	// reads as grey has stopped saying what red says.
-	if rested.Palette.Danger != awake.Palette.Danger {
-		t.Error("blurring changed what danger looks like")
+	// Everything goes quiet together, the signals included — a panel where the
+	// text dims and the colours do not reads as a panel with something wrong on
+	// it rather than one that is simply not in use.
+	if rested.Palette.Danger == awake.Palette.Danger {
+		t.Error("blurring left danger at full strength while the text went quiet")
+	}
+	// But only so far: a red faded until it reads as grey has stopped saying
+	// what red says.
+	if r, g, b := rgb(rested.Palette.Danger.Dark); r <= g || r <= b {
+		t.Errorf("a rested danger is %q, which is no longer red", rested.Palette.Danger.Dark)
 	}
 
 	m, _ = m.Update(tea.FocusMsg{})
@@ -1667,4 +1673,11 @@ func TestBlurChangesNothingButTheColours(t *testing.T) {
 	if m.cursor != 4 || m.chrome.Focus != FocusList {
 		t.Errorf("blur moved the cursor to %d in band %v", m.cursor, m.chrome.Focus)
 	}
+}
+
+// rgb splits a six-digit hex colour, for the assertions about what a colour
+// still looks like once it has been drawn quieter.
+func rgb(hex string) (r, g, b int) {
+	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return r, g, b
 }

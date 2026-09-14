@@ -194,3 +194,92 @@ func abs(v int) int {
 	}
 	return v
 }
+
+// A resting panel goes quiet all at once. Moving some colours a long way and
+// others hardly at all is what made it read as a panel with something wrong on
+// it rather than one that is simply not in use.
+func TestRestingMovesEveryColourByTheSameAmount(t *testing.T) {
+	p := DefaultPalette()
+	q := p.AtRest()
+
+	var moved []float64
+	each(p, q, func(name string, from, to lipgloss.AdaptiveColor) {
+		if name == "Ground" {
+			return // the background does not move toward itself
+		}
+		for _, dark := range []bool{false, true} {
+			a, b := pick(from, dark), pick(to, dark)
+			if a == b {
+				t.Errorf("dark=%v: %s did not move at all", dark, name)
+				continue
+			}
+			moved = append(moved, travel(a, b, dark))
+		}
+	})
+	if len(moved) == 0 {
+		t.Fatal("nothing was compared")
+	}
+	lo, hi := moved[0], moved[0]
+	for _, d := range moved {
+		lo, hi = min(lo, d), max(hi, d)
+	}
+	if hi-lo > 0.02 {
+		t.Errorf("colours moved between %.2f and %.2f of the way; want one step for all",
+			lo, hi)
+	}
+	if hi > 0.5 {
+		t.Errorf("resting moves %.2f of the way to the background, which is not a light hand", hi)
+	}
+}
+
+// What a colour means has to survive resting: a red faded until it reads as grey
+// has stopped saying what red says.
+func TestRestingKeepsAColourRecognisable(t *testing.T) {
+	q := DefaultPalette().AtRest()
+	r, g, b := rgb(q.Danger.Dark)
+	if r <= g || r <= b {
+		t.Errorf("a resting danger is %q, which is no longer red", q.Danger.Dark)
+	}
+	gr, gg, gb := rgb(q.Success.Dark)
+	if gg <= gr || gg <= gb {
+		t.Errorf("a resting success is %q, which is no longer green", q.Success.Dark)
+	}
+}
+
+// each walks the colours of two palettes side by side.
+func each(a, b Palette, f func(name string, from, to lipgloss.AdaptiveColor)) {
+	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
+	for i := 0; i < av.NumField(); i++ {
+		from, ok := av.Field(i).Interface().(lipgloss.AdaptiveColor)
+		if !ok {
+			continue
+		}
+		to := bv.Field(i).Interface().(lipgloss.AdaptiveColor)
+		f(av.Type().Field(i).Name, from, to)
+	}
+}
+
+// travel is how far a colour moved toward the ground, as a fraction.
+func travel(from, to string, dark bool) float64 {
+	ground := DefaultPalette().Ground.Light
+	if dark {
+		ground = DefaultPalette().Ground.Dark
+	}
+	er, eg, eb := rgb(ground)
+	fr, fg, fb := rgb(from)
+	tr, tg, tb := rgb(to)
+	var sum float64
+	n := 0
+	for i, c := range [][2]int{{fr, tr}, {fg, tg}, {fb, tb}} {
+		gap := float64([]int{er, eg, eb}[i]) - float64(c[0])
+		if gap == 0 {
+			continue
+		}
+		sum += (float64(c[1]) - float64(c[0])) / gap
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
+}
