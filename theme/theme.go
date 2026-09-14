@@ -20,6 +20,15 @@ type Palette struct {
 	Accent lipgloss.AdaptiveColor // the selected or focused thing
 	Key    lipgloss.AdaptiveColor // key names in a status bar
 
+	// Ground is the terminal's own background, near enough to write on: the
+	// foreground for text drawn on a band of another colour, where Text would
+	// be the one thing guaranteed not to read.
+	//
+	// An approximation, since a terminal's real background is whatever the user
+	// set. It only ever appears on top of a colour this palette chose, so what
+	// it has to contrast with is known even when the screen behind it is not.
+	Ground lipgloss.AdaptiveColor
+
 	// Resting is Accent for an app that is not the one being typed into: the
 	// same blue with the life taken out of it. A selected row still has to read
 	// as selected — you want to see where you left it — without competing with
@@ -63,6 +72,7 @@ func DefaultPalette() Palette {
 		Accent:  lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
 		Resting: lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
 		Key:     lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
+		Ground:  lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#16161e"},
 		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
 		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
 		Danger:  lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
@@ -100,14 +110,18 @@ type Styles struct {
 	KeyName  lipgloss.Style // "^G"
 	KeyDesc  lipgloss.Style // "grep"
 	Cursor   lipgloss.Style // the caret of a text field being typed into
-	Success  lipgloss.Style
-	Warn     lipgloss.Style
-	Danger   lipgloss.Style
-	Begun    lipgloss.Style
-	Flight   lipgloss.Style
-	Spent    lipgloss.Style
-	Voice    lipgloss.Style
-	Judge    lipgloss.Style
+	// Selection is text picked out in a field, drawn as a band rather than
+	// reversed: reversed is what the caret is, and a selection that looks like
+	// the caret leaves you unable to tell where typing would land.
+	Selection lipgloss.Style
+	Success   lipgloss.Style
+	Warn      lipgloss.Style
+	Danger    lipgloss.Style
+	Begun     lipgloss.Style
+	Flight    lipgloss.Style
+	Spent     lipgloss.Style
+	Voice     lipgloss.Style
+	Judge     lipgloss.Style
 }
 
 // Chevron is the separator between crumbs: a plain one, not a powerline
@@ -171,14 +185,16 @@ func New(p Palette) Styles {
 		KeyName:  fg(p.Key).Bold(true),
 		KeyDesc:  fg(p.Dim),
 		Cursor:   fg(p.Dim),
-		Success:  fg(p.Success),
-		Warn:     fg(p.Warn),
-		Danger:   fg(p.Danger),
-		Begun:    fg(p.Begun),
-		Flight:   fg(p.Flight),
-		Spent:    fg(p.Spent),
-		Voice:    fg(p.Voice),
-		Judge:    fg(p.Judge),
+		Selection: lipgloss.NewStyle().
+			Foreground(p.Ground).Background(p.Accent),
+		Success: fg(p.Success),
+		Warn:    fg(p.Warn),
+		Danger:  fg(p.Danger),
+		Begun:   fg(p.Begun),
+		Flight:  fg(p.Flight),
+		Spent:   fg(p.Spent),
+		Voice:   fg(p.Voice),
+		Judge:   fg(p.Judge),
 	}
 }
 
