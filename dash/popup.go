@@ -59,8 +59,12 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	}
 	out := []string{edge.Render("╭") + head + edge.Render(strings.Repeat("─", rule)+"╮")}
 
+	// Cut as well as padded: a body line longer than the box runs straight
+	// through the right-hand border, and a popup that cannot hold its own frame
+	// is worse than one that says less.
 	line := func(text string) {
-		out = append(out, edge.Render("│")+" "+padTo(text, inner-2)+" "+edge.Render("│"))
+		out = append(out, edge.Render("│")+" "+padTo(cutTo(text, inner-2), inner-2)+" "+
+			edge.Render("│"))
 	}
 	line("")
 	for _, b := range p.Body {

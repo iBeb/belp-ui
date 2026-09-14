@@ -392,3 +392,20 @@ func background(hex string) string {
 	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
 	return fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
 }
+
+// A body line longer than the box runs straight through the right-hand border.
+// A popup that cannot hold its own frame is worse than one that says less.
+func TestAPopupKeepsItsFrameWhateverIsPutInIt(t *testing.T) {
+	s := theme.Default()
+	long := strings.Repeat("the engine did not answer ", 6)
+	p := Popup{Title: "cannot start web", Body: []string{long, "short"},
+		Buttons: []Button{{Label: "close"}}, Note: long}
+
+	for _, width := range []int{20, 30, 44, 60} {
+		for _, line := range p.Render(s, width) {
+			if got := lipgloss.Width(line); got != width {
+				t.Errorf("at width %d a line is %d wide: %q", width, got, plain(line))
+			}
+		}
+	}
+}
