@@ -106,6 +106,10 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyShiftLeft, Alt: true}
 	case "alt+shift+right":
 		return tea.KeyMsg{Type: tea.KeyShiftRight, Alt: true}
+	case "alt+b":
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b"), Alt: true}
+	case "alt+f":
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f"), Alt: true}
 	}
 	// Anything left is typed, which is right for a letter and a trap for a
 	// combination: an unmapped "alt+left" would go in as nine characters and
@@ -1680,4 +1684,26 @@ func TestBlurChangesNothingButTheColours(t *testing.T) {
 func rgb(hex string) (r, g, b int) {
 	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
 	return r, g, b
+}
+
+// The frame and the list have to go quiet together. Rows belong to the app, so
+// the app has to be able to ask what this screen is drawing with — reaching for
+// the styles it was built with leaves the one panel on a grid whose list still
+// looks live.
+func TestAppsCanAskWhichStylesToDrawRowsWith(t *testing.T) {
+	m := model(10)
+	awake := m.Styles()
+
+	m, _ = m.Update(tea.BlurMsg{})
+	if m.Styles().Palette.Text == awake.Palette.Text {
+		t.Error("a blurred screen still offers the live styles to its rows")
+	}
+	if m.Styles().Palette != m.chrome.Styles.Palette {
+		t.Error("Styles() disagrees with what the frame is drawn with")
+	}
+
+	m, _ = m.Update(tea.FocusMsg{})
+	if m.Styles().Palette.Text != awake.Palette.Text {
+		t.Error("the styles did not come back when the keys did")
+	}
 }

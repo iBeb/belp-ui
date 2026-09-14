@@ -255,9 +255,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.FocusMsg:
 		m.chrome.Styles = m.awake
 		return m, nil
+
 	}
 	return m, nil
 }
+
+// Styles is what this screen is drawing with at the moment: the app's own, or
+// the quieter set it takes while the keys are somewhere else.
+//
+// Rows and previews belong to the app, so the app has to ask rather than reach
+// for the styles it was built with — a screen whose frame goes quiet and whose
+// list does not is the one panel on a grid that still looks live.
+func (m Model) Styles() theme.Styles { return m.chrome.Styles }
 
 // wheelRows is how far one wheel notch moves the list. Three is the usual
 // terminal step; one is sluggish and a whole page loses your place.
