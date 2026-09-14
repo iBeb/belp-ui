@@ -27,6 +27,9 @@ type Tone int
 const (
 	// Plain is an ordinary control.
 	Plain Tone = iota
+	// Good is the safe setting of a choice: the one you would rather find
+	// selected when you come back to it.
+	Good
 	// Care is one whose effect reaches past this machine, or costs real time.
 	Care
 	// Grave is destructive.
@@ -35,6 +38,8 @@ const (
 
 func (t Tone) style(s theme.Styles) lipgloss.Style {
 	switch t {
+	case Good:
+		return s.Success
 	case Care:
 		return s.Warn
 	case Grave:
@@ -46,6 +51,8 @@ func (t Tone) style(s theme.Styles) lipgloss.Style {
 
 func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	switch t {
+	case Good:
+		return p.Success
 	case Care:
 		return p.Warn
 	case Grave:

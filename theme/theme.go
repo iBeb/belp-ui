@@ -14,9 +14,14 @@ import "github.com/charmbracelet/lipgloss"
 // and lipgloss chooses per the terminal's reported background. A single fixed
 // colour is always wrong on one of the two.
 type Palette struct {
-	Text   lipgloss.AdaptiveColor // body text
-	Dim    lipgloss.AdaptiveColor // labels, metadata, anything secondary
-	Faint  lipgloss.AdaptiveColor // rules and separators
+	Text  lipgloss.AdaptiveColor // body text
+	Dim   lipgloss.AdaptiveColor // metadata, anything secondary
+	Faint lipgloss.AdaptiveColor // rules and separators
+	// Quiet is the name of a thing rather than the thing: the label beside a
+	// value, the key beside a fact. A step below Dim, because a column of labels
+	// is read once and then skipped over, and one drawn at the weight of the
+	// values makes a block of facts read as twice as much text as it is.
+	Quiet  lipgloss.AdaptiveColor
 	Accent lipgloss.AdaptiveColor // the selected or focused thing
 	Key    lipgloss.AdaptiveColor // key names in a status bar
 
@@ -69,6 +74,7 @@ func DefaultPalette() Palette {
 		Text:    lipgloss.AdaptiveColor{Light: "#1c1c1c", Dark: "#ffffff"},
 		Dim:     lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#dcdcdc"},
 		Faint:   lipgloss.AdaptiveColor{Light: "#c6c6c6", Dark: "#3a3a3a"},
+		Quiet:   lipgloss.AdaptiveColor{Light: "#8a8a8a", Dark: "#7d7d7d"},
 		Accent:  lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
 		Resting: lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
 		Key:     lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
@@ -179,7 +185,7 @@ func New(p Palette) Styles {
 		Item:     fg(p.Text),
 		Selected: fg(p.Accent).Bold(true),
 		Desc:     fg(p.Dim),
-		Label:    fg(p.Dim),
+		Label:    fg(p.Quiet),
 		Value:    fg(p.Text),
 		Rule:     fg(p.Faint),
 		KeyName:  fg(p.Key).Bold(true),
@@ -211,6 +217,7 @@ func (p Palette) AtRest() Palette {
 	q := p
 	q.Text = p.Dim
 	q.Dim = p.Faint
+	q.Quiet = p.Faint
 	q.Key = p.Faint
 	q.Accent = p.Resting
 	return q

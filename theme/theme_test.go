@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"testing"
@@ -136,4 +137,60 @@ func TestForRowLeavesAnUnselectedRowAlone(t *testing.T) {
 			t.Errorf("%s changed for an unselected row", f.Name)
 		}
 	}
+}
+
+// A label is the name of a thing rather than the thing, and has to be quieter
+// than the value beside it — on both grounds, a block of facts that draws its
+// keys at the weight of its values reads as twice as much text as it is.
+func TestLabelsAreQuieterThanTheValuesTheyName(t *testing.T) {
+	p := DefaultPalette()
+	for _, c := range []struct {
+		what  string
+		quiet lipgloss.AdaptiveColor
+		loud  lipgloss.AdaptiveColor
+	}{
+		{"label against value", p.Quiet, p.Text},
+		{"label against secondary text", p.Quiet, p.Dim},
+	} {
+		for _, dark := range []bool{false, true} {
+			if near(pick(c.quiet, dark), pick(c.loud, dark)) {
+				t.Errorf("dark=%v: %s — %q and %q are the same shade",
+					dark, c.what, pick(c.quiet, dark), pick(c.loud, dark))
+			}
+		}
+	}
+	if New(p).Label.GetForeground() == New(p).Value.GetForeground() {
+		t.Error("Label and Value draw in the same colour")
+	}
+}
+
+func pick(c lipgloss.AdaptiveColor, dark bool) string {
+	if dark {
+		return c.Dark
+	}
+	return c.Light
+}
+
+// near reports whether two hex colours are within a hair of each other, which is
+// the failure worth catching: not "wrong colour" but "no visible difference".
+func near(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ar, ag, ab := rgb(a)
+	br, bg, bb := rgb(b)
+	return abs(ar-br)+abs(ag-bg)+abs(ab-bb) < 48
+}
+
+func rgb(s string) (int, int, int) {
+	var r, g, b int
+	_, _ = fmt.Sscanf(s, "#%02x%02x%02x", &r, &g, &b)
+	return r, g, b
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
