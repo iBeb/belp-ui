@@ -66,7 +66,7 @@ func TestARowOfButtonsLinesUp(t *testing.T) {
 	s := theme.Default()
 	row := []Button{{Label: "▸ start"}, {Label: "repair"}, {Label: Info}}
 	for focus := -1; focus < len(row); focus++ {
-		lines := Buttons(s, row, focus)
+		lines := Buttons(s, row, focus, 0)
 		if len(lines) != 3 {
 			t.Fatalf("a row of buttons drew %d lines", len(lines))
 		}
@@ -79,33 +79,31 @@ func TestARowOfButtonsLinesUp(t *testing.T) {
 	}
 }
 
-// A switch shows the alternatives rather than hiding them behind a press, and
-// says which one is set even when the keys are somewhere else.
-func TestASwitchAlwaysShowsWhichOptionIsSet(t *testing.T) {
+// A radio shows every option with the chosen one filled in, and says which is
+// set even when the keys are somewhere else.
+func TestARadioAlwaysShowsWhichOptionIsSet(t *testing.T) {
 	s := theme.Default()
-	w := Switch{Options: []string{"RO", "RW"}, Active: 1}
+	r := Radio{Options: []string{"read only", "read · write"}, Active: 1}
 	for _, focused := range []bool{false, true} {
-		line := w.Render(s, focused)
-		if got := lipgloss.Width(line); got != w.Wide() {
-			t.Errorf("focused=%v: switch is %d wide, Wide() says %d", focused, got, w.Wide())
+		line := r.Render(s, focused)
+		if got := lipgloss.Width(line); got != r.Wide() {
+			t.Errorf("focused=%v: radio is %d wide, Wide() says %d", focused, got, r.Wide())
 		}
 		flat := plain(line)
-		if !strings.Contains(flat, "RO") || !strings.Contains(flat, "RW") {
-			t.Errorf("the switch hides an option: %q", flat)
+		for _, opt := range r.Options {
+			if !strings.Contains(flat, opt) {
+				t.Errorf("the radio hides %q: %q", opt, flat)
+			}
+		}
+		if strings.Count(flat, radioOn) != 1 {
+			t.Errorf("the radio fills %d marks, want exactly one: %q",
+				strings.Count(flat, radioOn), flat)
 		}
 	}
-	// Which option is set is carried by the drawing, not by the text: moving the
-	// setting must change what is on screen without moving anything.
-	for _, focused := range []bool{false, true} {
-		ro := Switch{Options: []string{"RO", "RW"}, Active: 0}.Render(s, focused)
-		rw := Switch{Options: []string{"RO", "RW"}, Active: 1}.Render(s, focused)
-		if ro == rw {
-			t.Errorf("focused=%v: the setting does not show", focused)
-		}
-		if plain(ro) != plain(rw) {
-			t.Errorf("focused=%v: setting the switch moved the text: %q vs %q",
-				focused, plain(ro), plain(rw))
-		}
+	// Which option is set is carried by the mark, not by the order.
+	first := plain(Radio{Options: r.Options, Active: 0}.Render(s, false))
+	if !strings.HasPrefix(first, radioOn) {
+		t.Errorf("setting the first option did not fill its mark: %q", first)
 	}
 }
 
@@ -135,18 +133,13 @@ func TestPairsReflowAndStillLineUp(t *testing.T) {
 			}
 		}
 	}
-	// The values start at the same column in every row of a stacked block.
-	at := -1
-	for _, line := range narrow {
-		i := strings.Index(plain(line), " ")
-		flat := plain(line)
-		for i < len(flat) && flat[i] == ' ' {
-			i++
-		}
-		if at < 0 {
-			at = i
-		} else if i != at {
-			t.Errorf("a value starts at %d where another started at %d", i, at)
+	// The values start at the same column in every row of a stacked block, and
+	// the keys end there — which is the whole point of aligning them right.
+	keyW := KeyWidth(pairs)
+	for i, line := range narrow {
+		want := rightTo(pairs[i].Key, keyW) + " " + pairs[i].Value
+		if got := strings.TrimRight(plain(line), " "); got != want {
+			t.Errorf("row %d drew %q, want %q", i, got, want)
 		}
 	}
 }
@@ -225,5 +218,67 @@ func TestAClickFindsThePopupButtonItWasDrawnOn(t *testing.T) {
 	// And a click on the body is not a click on a button.
 	if _, ok := spot.ButtonAt(p, s, spot.X+3, spot.Y+2); ok {
 		t.Error("a click on the popup's text pressed a button")
+	}
+}
+
+// Given a width, a row of buttons fills it exactly: a row that stops short of
+// the card's edge reads as something half drawn.
+func TestButtonsStretchToFillTheirRow(t *testing.T) {
+	s := theme.Default()
+	for _, row := range [][]Button{
+		{{Label: "▮▮ pause"}, {Label: "⚒ repair"}, {Label: Info}},
+		{{Label: "▮▮ stop"}, {Label: Info}},
+		{{Label: "only one"}},
+	} {
+		natural := len(row) - 1
+		for _, b := range row {
+			natural += b.Wide()
+		}
+		for _, width := range []int{natural, natural + 1, 44, 60, 100} {
+			lines := Buttons(s, row, 0, width)
+			for _, l := range lines {
+				if got := lipgloss.Width(l); got != width {
+					t.Errorf("%d buttons in %d cells drew %d: %q",
+						len(row), width, got, plain(l))
+				}
+			}
+		}
+	}
+}
+
+// The slack goes out in proportion, so the button that asked for most still has
+// most — a row where a one-letter button ends up as wide as the main action is a
+// row that has lost its emphasis.
+func TestTheStretchKeepsTheProportions(t *testing.T) {
+	s := theme.Default()
+	row := []Button{{Label: "▮▮ pause"}, {Label: Info}}
+	wide := stretch(row, 60, 1)
+	if wide[0].Width <= wide[1].Width {
+		t.Errorf("the main button is %d wide and the mark %d", wide[0].Width, wide[1].Width)
+	}
+	if got := wide[0].Width + wide[1].Width + 1; got != 60 {
+		t.Errorf("the stretched row is %d wide, want 60", got)
+	}
+	// A row already wider than the space is left alone rather than squeezed.
+	if tight := stretch(row, 4, 1); tight[0].Width != 0 {
+		t.Error("a row with no room was stretched anyway")
+	}
+	_ = s
+}
+
+// Keys end where the values begin: a ragged left edge of labels reads as a list
+// of words rather than as a gutter.
+func TestKeysAreRightAlignedAgainstTheirValues(t *testing.T) {
+	s := theme.Default()
+	pairs := []Pair{{Key: "port", Value: ":15432"}, {Key: "traffic", Value: "idle"}}
+	lines := Pairs(s, pairs, 20)
+	if len(lines) != 2 {
+		t.Fatalf("drew %d lines", len(lines))
+	}
+	if got := plain(lines[0]); !strings.HasPrefix(got, "   port ") {
+		t.Errorf("the short key is not padded on the left: %q", got)
+	}
+	if got := KeyWidth(pairs); got != len("traffic") {
+		t.Errorf("KeyWidth = %d, want the widest key", got)
 	}
 }

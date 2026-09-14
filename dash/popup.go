@@ -68,7 +68,7 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	}
 	if len(p.Buttons) > 0 {
 		line("")
-		for _, row := range Buttons(s, p.Buttons, p.Focus) {
+		for _, row := range Buttons(s, p.Buttons, p.Focus, 0) {
 			line(row)
 		}
 	}

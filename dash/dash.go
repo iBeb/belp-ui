@@ -55,9 +55,13 @@ func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	}
 }
 
-// Info is the mark that opens the detail. Three ASCII cells rather than ⓘ,
-// which half the terminal fonts render as an emoji and so two cells wide.
-const Info = "(i)"
+// Info is the mark that opens the detail.
+//
+// U+24D8 rather than ℹ or a Nerd Font glyph: the first carries an emoji
+// presentation in most fonts and so takes two cells in some terminals and one in
+// others, and the second is tofu anywhere the patched font is not installed.
+// This one is an ordinary letterform in a circle, which every font has.
+const Info = "ⓘ"
 
 // Button is a thing to press: a label in a thin box.
 //
@@ -110,8 +114,18 @@ func (b Button) Render(s theme.Styles, focused bool) []string {
 
 // Buttons draws several side by side, with one of them focused. A focus outside
 // the row focuses none of them.
-func Buttons(s theme.Styles, row []Button, focus int) []string {
+//
+// Given a width, the row is stretched to fill it and the slack is handed out in
+// proportion to what each button asked for, so a row of controls reaches both
+// edges of its card and the important one stays the widest. Given none, each is
+// as wide as its label.
+func Buttons(s theme.Styles, row []Button, focus, width int) []string {
 	const gap = 1
+	if len(row) == 0 {
+		return []string{"", "", ""}
+	}
+	row = stretch(row, width, gap)
+
 	drawn := make([][]string, len(row))
 	for i, b := range row {
 		drawn[i] = b.Render(s, i == focus)
@@ -127,47 +141,85 @@ func Buttons(s theme.Styles, row []Button, focus int) []string {
 	return out
 }
 
-// Switch is a segmented choice: exactly one of a few, side by side, so that the
-// alternatives are visible rather than hidden behind a press.
-type Switch struct {
+// stretch hands the slack out in proportion, and gives the rounding to the last
+// button so the row lands exactly on the width rather than a cell short.
+func stretch(row []Button, width, gap int) []Button {
+	if width <= 0 {
+		return row
+	}
+	want := gap * (len(row) - 1)
+	for _, b := range row {
+		want += b.Wide()
+	}
+	if want >= width {
+		return row
+	}
+	room := width - gap*(len(row)-1)
+	natural := want - gap*(len(row)-1)
+
+	out := make([]Button, len(row))
+	spent := 0
+	for i, b := range row {
+		out[i] = b
+		if i == len(row)-1 {
+			out[i].Width = room - spent
+			continue
+		}
+		out[i].Width = b.Wide() * room / natural
+		spent += out[i].Width
+	}
+	return out
+}
+
+// Radio is a choice among a few, with every option in view and the chosen one
+// filled in.
+//
+// Drawn where the fact it sets already lives rather than as a control of its
+// own: the row that says which access a tunnel has is the row to change it on,
+// and a separate switch above it would be the same fact stated twice.
+type Radio struct {
 	Options []string
 	Active  int
-	Tone    Tone
+	// Tone colours the chosen option. The unchosen ones stay quiet whatever it
+	// is: a row of alternatives all shouting is a row that says nothing.
+	Tone Tone
 }
 
-// Render draws the switch on one line.
-func (w Switch) Render(s theme.Styles, focused bool) string {
-	if len(w.Options) == 0 {
+// The filled and hollow marks of a radio. Geometric shapes, one cell in every
+// font, for the same reason as everything else drawn here.
+const (
+	radioOn  = "◉"
+	radioOff = "○"
+)
+
+// Render draws the options on one line.
+func (r Radio) Render(s theme.Styles, focused bool) string {
+	if len(r.Options) == 0 {
 		return ""
 	}
-	on := lipgloss.NewStyle().Foreground(w.Tone.colour(s.Palette)).Reverse(true)
-	if !focused {
-		// Chosen but not focused still has to read as chosen: a switch drawn
-		// flat when the keys are elsewhere is a switch whose setting you have to
-		// go and check.
-		on = lipgloss.NewStyle().Foreground(w.Tone.colour(s.Palette)).Bold(true)
-	}
-	edge := s.Rule
+	chosen := r.Tone.style(s)
 	if focused {
-		edge = s.Selected
+		chosen = chosen.Bold(true).Underline(true)
 	}
-
-	parts := make([]string, len(w.Options))
-	for i, opt := range w.Options {
-		label := " " + opt + " "
-		if i == w.Active {
-			parts[i] = on.Render(label)
-		} else {
-			parts[i] = s.Desc.Render(label)
+	parts := make([]string, len(r.Options))
+	for i, opt := range r.Options {
+		if i == r.Active {
+			parts[i] = chosen.Render(radioOn + " " + opt)
+			continue
 		}
+		mark := s.Rule
+		if focused {
+			mark = s.Desc
+		}
+		parts[i] = mark.Render(radioOff + " " + opt)
 	}
-	return edge.Render("▏") + strings.Join(parts, edge.Render("│")) + edge.Render("▕")
+	return strings.Join(parts, "   ")
 }
 
-// Wide is how many cells a switch takes.
-func (w Switch) Wide() int {
-	n := 2 + max(0, len(w.Options)-1)
-	for _, opt := range w.Options {
+// Wide is how many cells a radio takes.
+func (r Radio) Wide() int {
+	n := 3 * max(0, len(r.Options)-1)
+	for _, opt := range r.Options {
 		n += lipgloss.Width(opt) + 2
 	}
 	return n
@@ -183,8 +235,22 @@ type Pair struct {
 	Quiet bool
 }
 
+// KeyWidth is the column the values of a block of pairs start after, so a row
+// the caller draws itself can line up with the block around it.
+func KeyWidth(pairs []Pair) int {
+	n := 0
+	for _, p := range pairs {
+		n = max(n, lipgloss.Width(p.Key))
+	}
+	return n
+}
+
 // Pairs lays facts out in as many columns of key-and-value as the width allows,
 // and stacks them when it does not.
+//
+// Keys right-aligned against their values: a ragged left edge of labels reads as
+// a list of words, where labels ending on one column read as the thing they
+// are, which is a gutter beside the facts.
 //
 // Every column is the same width, taken from the widest key and the widest
 // value, so the values line up down the block whichever column they land in —
@@ -236,7 +302,7 @@ func Pairs(s theme.Styles, pairs []Pair, width int) []string {
 			if p.Quiet {
 				value = s.Desc
 			}
-			line = append(line, s.Label.Render(padTo(cutTo(p.Key, keyW), keyW))+" "+
+			line = append(line, s.Label.Render(rightTo(cutTo(p.Key, keyW), keyW))+" "+
 				value.Render(padTo(cutTo(p.Value, valW), valW)))
 		}
 		out = append(out, strings.TrimRight(strings.Join(line, strings.Repeat(" ", gap)), " "))
@@ -283,6 +349,14 @@ func centre(label string, width int) string {
 	}
 	left := room / 2
 	return strings.Repeat(" ", left) + label + strings.Repeat(" ", room-left)
+}
+
+// rightTo pads on the left, for a column that ends where the next begins.
+func rightTo(text string, width int) string {
+	if n := width - lipgloss.Width(text); n > 0 {
+		return strings.Repeat(" ", n) + text
+	}
+	return text
 }
 
 func padTo(text string, width int) string {
