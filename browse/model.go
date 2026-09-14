@@ -410,6 +410,18 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.prompt(msg)
 	}
 
+	// The field answers first, and only while it has the focus: moving,
+	// deleting and typing are its business. What it declines falls
+	// through — the arrows that step out of it, Enter, the keys that drive a
+	// list — so a binding here and an edit there cannot both fire.
+	if m.chrome.Focus == FocusSearch {
+		if f, took := m.chrome.field().key(msg); took {
+			m.setField(f)
+			m.clamp()
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	// ^C, and only ^C. Never Esc: it is too useful inside an app — backing out
 	// of a field, closing an overlay — to spend on the one action that cannot be
@@ -462,18 +474,12 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// field. Same keys, because in both bands they mean "the next thing to the
 	// left", and the band already says which thing that is.
 	case "left":
-		switch m.chrome.Focus {
-		case FocusFilters:
+		if m.chrome.Focus == FocusFilters {
 			m.moveChip(-1)
-		case FocusSearch:
-			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, -1)
 		}
 	case "right":
-		switch m.chrome.Focus {
-		case FocusFilters:
+		if m.chrome.Focus == FocusFilters {
 			m.moveChip(1)
-		case FocusSearch:
-			m.chrome.Caret = moveAt(m.chrome.Query, m.chrome.Caret, 1)
 		}
 
 	// Whole groups, by letter, while the chips have the focus.
@@ -484,8 +490,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// search field, which reads as a search that does not work.
 	case "a", "n":
 		if m.chrome.Focus != FocusFilters && m.chrome.Focus != FocusMenu {
-			m.typeKey(msg)
-			break
+			break // the field above has already had it, if it wanted it
 		}
 		if m.setGroup(m.group, msg.String() == "a") {
 			return m, func() tea.Msg { return FiltersChangedMsg{} }
@@ -536,18 +541,12 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.cursor = min(m.count-1, m.cursor+rows)
 		}
 	case "home":
-		switch m.chrome.Focus {
-		case FocusList:
+		if m.chrome.Focus == FocusList {
 			m.cursor = 0
-		case FocusSearch:
-			m.chrome.Caret = 0
 		}
 	case "end":
-		switch m.chrome.Focus {
-		case FocusList:
+		if m.chrome.Focus == FocusList {
 			m.cursor = max(0, m.count-1)
-		case FocusSearch:
-			m.chrome.Caret = len([]rune(m.chrome.Query))
 		}
 
 	// ^U clears from anywhere, because it is advertised in the footer and a key
@@ -555,37 +554,10 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "ctrl+u":
 		m.chrome.Query, m.chrome.Caret = "", 0
 
-	case "backspace":
-		if m.chrome.Focus == FocusSearch {
-			m.chrome.Query, m.chrome.Caret = backspaceAt(m.chrome.Query, m.chrome.Caret)
-		}
-	case "delete":
-		if m.chrome.Focus == FocusSearch {
-			m.chrome.Query, m.chrome.Caret = deleteAt(m.chrome.Query, m.chrome.Caret)
-		}
-	case "ctrl+w":
-		if m.chrome.Focus == FocusSearch {
-			m.chrome.Query, m.chrome.Caret = dropWordAt(m.chrome.Query, m.chrome.Caret)
-		}
-
-	default:
-		m.typeKey(msg)
 	}
 
 	m.clamp()
 	return m, nil
-}
-
-// typeKey puts a printable key into the query, and is the only path that does.
-//
-// Shared with the cases bound to a letter, so that a shortcut which declines a
-// key returns it rather than swallowing it. Typing reaches the query only while
-// the search field has the focus: otherwise every letter would be both a search
-// term and a shortcut, and the list could never have single-key bindings.
-func (m *Model) typeKey(msg tea.KeyMsg) {
-	if m.chrome.Focus == FocusSearch && msg.Type == tea.KeyRunes {
-		m.chrome.Query, m.chrome.Caret = insertAt(m.chrome.Query, m.chrome.Caret, string(msg.Runes))
-	}
 }
 
 // confirm is the keyboard while a confirmation window is open.
@@ -616,8 +588,6 @@ func (m Model) confirm(msg tea.KeyMsg) (Model, tea.Cmd) {
 // cursor through the answer: one editor to learn, and ^U clearing the answer
 // rather than the query it is drawn over.
 func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
-	text, caret := m.chrome.Prompt.Text, m.chrome.Prompt.Caret
-
 	switch msg.String() {
 	case "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
@@ -631,37 +601,22 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		label, _ := m.close()
 		return m, func() tea.Msg { return CancelledMsg{Label: label} }
 
-	case "left":
-		caret = moveAt(text, caret, -1)
-	case "right":
-		caret = moveAt(text, caret, 1)
-	case "home":
-		caret = 0
-	case "end":
-		caret = len([]rune(text))
-
 	case "ctrl+u":
-		text, caret = "", 0
-	case "ctrl+w":
-		text, caret = dropWordAt(text, caret)
-	case "backspace":
-		text, caret = backspaceAt(text, caret)
-	case "delete":
-		text, caret = deleteAt(text, caret)
-
-	default:
-		// Space arrives as a rune here rather than as the list's Enter-alike:
-		// inside an answer it is a character like any other.
-		switch msg.Type {
-		case tea.KeySpace:
-			text, caret = insertAt(text, caret, " ")
-		case tea.KeyRunes:
-			text, caret = insertAt(text, caret, string(msg.Runes))
-		}
+		m.chrome.Prompt.Text, m.chrome.Prompt.Caret = "", 0
+		return m, nil
 	}
 
-	m.chrome.Prompt.Text, m.chrome.Prompt.Caret = text, caret
+	// Everything else a line of text answers to, from the same editor the search
+	// field uses.
+	if f, took := m.chrome.Prompt.field().key(msg); took {
+		m.chrome.Prompt.Text, m.chrome.Prompt.Caret = f.Text, f.Caret
+	}
 	return m, nil
+}
+
+// setField puts an edited line back into the search band.
+func (m *Model) setField(f field) {
+	m.chrome.Query, m.chrome.Caret = f.Text, f.Caret
 }
 
 // moveChip walks the cursor along the whole bar, crossing group boundaries, so
@@ -971,13 +926,6 @@ func dropWordAt(text string, caret int) (string, int) {
 	head, tail := split(text, caret)
 	head = dropWord(head)
 	return head + tail, len([]rune(head))
-}
-
-// moveAt walks the cursor along the text, stopping at either end rather than
-// wrapping: a cursor that reappears at the far end has lost the one thing it was
-// telling you.
-func moveAt(text string, caret, delta int) int {
-	return clamp(caret+delta, 0, len([]rune(text)))
 }
 
 // dropWord removes the last word of a query, and the trailing space with it.

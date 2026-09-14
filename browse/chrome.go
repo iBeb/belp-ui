@@ -112,6 +112,11 @@ type Prompt struct {
 	Caret int
 }
 
+// field is the answer as the line editor sees it.
+func (p Prompt) field() field {
+	return field{Text: p.Text, Caret: p.Caret}
+}
+
 // Chrome is everything a browse screen draws except the rows themselves.
 //
 // The rows and the preview text stay with the app: they are the only part that
@@ -500,11 +505,12 @@ func (c Chrome) Search(width int) string {
 		return fit(prompt+" "+s.Desc.Render(c.Placeholder), width)
 	}
 
-	caret := -1
-	if focused {
-		caret = c.Caret
-	}
-	return fit(prompt+" "+typed(s, c.Query, caret, room), width)
+	return fit(prompt+" "+typed(s, c.field(), room, focused), width)
+}
+
+// field is the query as the line editor sees it.
+func (c Chrome) field() field {
+	return field{Text: c.Query, Caret: c.Caret}
 }
 
 // typed draws text into room cells with the cursor sitting at caret, or with no
@@ -513,10 +519,12 @@ func (c Chrome) Search(width int) string {
 // One editor for both fields that have one: the search band and the question in
 // a window. Two would drift, and the second to drift would be the one nobody
 // looks at until they are typing into it.
-func typed(s theme.Styles, text string, caret, room int) string {
-	cells := []rune(text)
+func typed(s theme.Styles, f field, room int, focused bool) string {
+	cells := []rune(f.Text)
 	follow := len(cells) - 1
-	if caret >= 0 {
+	caret := -1
+	if focused {
+		caret = f.Caret
 		// One cell more than there are characters: the one the cursor sits on
 		// when it is past the end, which is where it spends most of its life.
 		cells = append(cells, ' ')
@@ -801,7 +809,7 @@ func (c Chrome) promptBody(room int) []string {
 
 	return []string{
 		s.Selected.Render(label),
-		typed(s, c.Prompt.Text, c.Prompt.Caret, room),
+		typed(s, c.Prompt.field(), room, true),
 		"",
 		s.KeyName.Render("↵") + " " + s.KeyDesc.Render("confirm") + keyGap +
 			s.KeyName.Render("␛") + " " + s.KeyDesc.Render("cancel"),
