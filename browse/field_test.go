@@ -255,7 +255,7 @@ func TestWordSkipStopsAtTheEdgesOfWords(t *testing.T) {
 // meta escape and ⌃← as a CSI sequence, and which one a keyboard produces is
 // not something an app gets to choose, so both are bound.
 func TestWordKeysAreBoundInBothFields(t *testing.T) {
-	for _, k := range []string{"alt+left", "ctrl+left"} {
+	for _, k := range []string{"alt+left", "ctrl+left", "alt+b"} {
 		m := launched(5)
 		m, _ = press(m, "ctrl+u")
 		for _, r := range strings.Split("one two", "") {

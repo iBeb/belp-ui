@@ -131,12 +131,14 @@ func (f field) key(msg tea.KeyMsg) (field, bool) {
 		return f.move(f.Caret-1, true), true
 	case "shift+right":
 		return f.move(f.Caret+1, true), true
-	// Both spellings of a word skip: Terminal.app sends ⌥← as a meta escape and
-	// ⌃← as a CSI sequence, and which one a keyboard produces is not something
-	// an app gets to choose.
-	case "alt+left", "ctrl+left":
+	// Every spelling of a word skip, because the terminal decides which one it
+	// sends and the app does not. Terminal.app's shipped key map turns ⌃← into
+	// a CSI sequence and ⌥← into ESC b — unless "Use Option as Meta Key" is on,
+	// when ⌥← becomes ESC and the plain arrow instead. ESC b and ESC f are also
+	// what readline has meant by a word skip since long before any of this.
+	case "alt+left", "ctrl+left", "alt+b":
 		return f.move(f.wordLeft(), false), true
-	case "alt+right", "ctrl+right":
+	case "alt+right", "ctrl+right", "alt+f":
 		return f.move(f.wordRight(), false), true
 	case "alt+shift+left", "ctrl+shift+left":
 		return f.move(f.wordLeft(), true), true
