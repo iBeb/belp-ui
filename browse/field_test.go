@@ -219,3 +219,98 @@ func TestClickingTheBorderLeavesTheCaretAlone(t *testing.T) {
 		t.Errorf("Caret = %d, want it left at %d", m.chrome.Caret, before)
 	}
 }
+
+// A word skip lands at the edge of a word, crossing whatever gap it starts in.
+//
+// Punctuation separates as much as a space does, so a skip through a path or a
+// branch name stops at its parts. Treating them as one word makes the key
+// useless on exactly the text these apps are full of.
+func TestWordSkipStopsAtTheEdgesOfWords(t *testing.T) {
+	for _, tc := range []struct {
+		text        string
+		caret       int
+		left, right int
+	}{
+		{"one two three", 13, 8, 13},       // from the end, back over "three"
+		{"one two three", 8, 4, 13},        // at "three", back to the start of "two"
+		{"one two three", 10, 8, 13},       // inside a word, back to its own start
+		{"one two three", 0, 0, 3},         // at the start, forward over "one"
+		{"one two three", 4, 0, 7},         // from a word start, over the space behind it
+		{"feat/add-the-thing", 0, 0, 4},    // punctuation is a boundary
+		{"feat/add-the-thing", 18, 13, 18}, // back over "thing", not the whole branch
+		{"  ", 2, 0, 2},                    // nothing but gap
+		{"", 0, 0, 0},
+	} {
+		f := field{Text: tc.text, Caret: tc.caret}
+		if got := f.wordLeft(); got != tc.left {
+			t.Errorf("wordLeft(%q, %d) = %d, want %d", tc.text, tc.caret, got, tc.left)
+		}
+		if got := f.wordRight(); got != tc.right {
+			t.Errorf("wordRight(%q, %d) = %d, want %d", tc.text, tc.caret, got, tc.right)
+		}
+	}
+}
+
+// And the keys that ask for it reach both fields. Terminal.app sends ⌥← as a
+// meta escape and ⌃← as a CSI sequence, and which one a keyboard produces is
+// not something an app gets to choose, so both are bound.
+func TestWordKeysAreBoundInBothFields(t *testing.T) {
+	for _, k := range []string{"alt+left", "ctrl+left"} {
+		m := launched(5)
+		m, _ = press(m, "ctrl+u")
+		for _, r := range strings.Split("one two", "") {
+			m, _ = press(m, r)
+		}
+		m, _ = press(m, k, "X")
+		if got := m.Query(); got != "one Xtwo" {
+			t.Errorf("%s in the search field gave %q, want %q", k, got, "one Xtwo")
+		}
+	}
+
+	p := launched(5)
+	p.chrome.Focus = FocusPrompt
+	p.chrome.Prompt = Prompt{Label: "rename", Text: "one two", Caret: 7}
+	p, _ = press(p, "alt+right") // already at the end: nowhere to go
+	p, _ = press(p, "alt+left", "X")
+	if got := p.chrome.Prompt.Text; got != "one Xtwo" {
+		t.Errorf("the window's answer is %q, want %q", got, "one Xtwo")
+	}
+}
+
+// Deleting by word, forwards and back.
+func TestDeletingByWord(t *testing.T) {
+	m := launched(5)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("one two three", "") {
+		m, _ = press(m, r)
+	}
+	m, _ = press(m, "alt+backspace")
+	if got := m.Query(); got != "one two " {
+		t.Errorf("after alt+backspace the query is %q, want %q", got, "one two ")
+	}
+	m, _ = press(m, "home", "alt+delete")
+	if got := m.Query(); got != " two " {
+		t.Errorf("after alt+delete the query is %q, want %q", got, " two ")
+	}
+}
+
+// And it crosses what a word skip crosses, rather than running to the nearest
+// space: the key that moves and the key that deletes have to agree, or the
+// second undoes more than the first said it would.
+func TestDeletingByWordStopsWhereASkipDoes(t *testing.T) {
+	m := launched(5)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("feat/add-thing", "") {
+		m, _ = press(m, r)
+	}
+	m, _ = press(m, "alt+backspace")
+	if got := m.Query(); got != "feat/add-" {
+		t.Errorf("alt+backspace left %q, want %q", got, "feat/add-")
+	}
+
+	// ^W is the shell's key and keeps the shell's word, which ends at a space.
+	m, _ = press(m, "ctrl+w")
+	if got := m.Query(); got != "" {
+		t.Errorf("^W left %q, want the whole word gone", got)
+	}
+}

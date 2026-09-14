@@ -72,6 +72,30 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
 	case "ctrl+q":
 		return tea.KeyMsg{Type: tea.KeyCtrlQ}
+	case "ctrl+a":
+		return tea.KeyMsg{Type: tea.KeyCtrlA}
+	case "ctrl+e":
+		return tea.KeyMsg{Type: tea.KeyCtrlE}
+	case "delete":
+		return tea.KeyMsg{Type: tea.KeyDelete}
+	case "ctrl+left":
+		return tea.KeyMsg{Type: tea.KeyCtrlLeft}
+	case "ctrl+right":
+		return tea.KeyMsg{Type: tea.KeyCtrlRight}
+	case "alt+left":
+		return tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
+	case "alt+right":
+		return tea.KeyMsg{Type: tea.KeyRight, Alt: true}
+	case "alt+backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace, Alt: true}
+	case "alt+delete":
+		return tea.KeyMsg{Type: tea.KeyDelete, Alt: true}
+	}
+	// Anything left is typed, which is right for a letter and a trap for a
+	// combination: an unmapped "alt+left" would go in as nine characters and
+	// the test would pass on the wrong thing.
+	if strings.Contains(s, "+") {
+		panic("key: " + s + " is not mapped, and would be typed as text")
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
