@@ -314,3 +314,105 @@ func TestDeletingByWordStopsWhereASkipDoes(t *testing.T) {
 		t.Errorf("^W left %q, want the whole word gone", got)
 	}
 }
+
+// Shift and an arrow select, and typing replaces what was selected.
+func TestSelectingAndTypingOverIt(t *testing.T) {
+	m := launched(5)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("one two", "") {
+		m, _ = press(m, r)
+	}
+
+	m, _ = press(m, "home", "alt+shift+right") // "one"
+	if lo, hi, ok := m.chrome.field().sel(); !ok || lo != 0 || hi != 3 {
+		t.Fatalf("selection = (%d, %d, %v), want (0, 3, true)", lo, hi, ok)
+	}
+	m, _ = press(m, "X")
+	if got := m.Query(); got != "X two" {
+		t.Errorf("typing over the selection gave %q, want %q", got, "X two")
+	}
+	if _, _, ok := m.chrome.field().sel(); ok {
+		t.Errorf("the selection survived being typed over")
+	}
+}
+
+// A key that deletes takes the whole selection, rather than one character out
+// of the middle of it and the selection quietly with it.
+func TestDeleteTakesTheWholeSelection(t *testing.T) {
+	for _, k := range []string{"backspace", "delete", "ctrl+w"} {
+		m := launched(5)
+		m, _ = press(m, "ctrl+u")
+		for _, r := range strings.Split("one two", "") {
+			m, _ = press(m, r)
+		}
+		m, _ = press(m, "shift+home", k)
+		if got := m.Query(); got != "" {
+			t.Errorf("%s with everything selected left %q", k, got)
+		}
+	}
+}
+
+// An arrow with no shift is the way out of a selection, and leaves the cursor
+// where the arrow put it rather than where the selection ended.
+func TestAnArrowDropsTheSelection(t *testing.T) {
+	m := launched(5)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("one", "") {
+		m, _ = press(m, r)
+	}
+	m, _ = press(m, "shift+home", "right")
+	if _, _, ok := m.chrome.field().sel(); ok {
+		t.Errorf("the selection survived a plain arrow")
+	}
+	m, _ = press(m, "X")
+	if got := m.Query(); got != "oXne" {
+		t.Errorf("query = %q, want %q — the arrow moved to the wrong place", got, "oXne")
+	}
+}
+
+// A Chrome or a Prompt built as a literal has nothing selected.
+//
+// The selection was once an anchor with -1 for "none", which made the zero
+// value a selection of the first character: every app that built a Prompt
+// without knowing about anchors had its first letter silently eaten by the
+// next keystroke. The bool is what prevents that, and this is the test that
+// says so.
+func TestALiteralFieldHasNothingSelected(t *testing.T) {
+	if _, _, ok := (Prompt{Text: "abc", Caret: 1}).field().sel(); ok {
+		t.Errorf("a Prompt built without a selection has one")
+	}
+	if _, _, ok := (Chrome{Query: "abc", Caret: 1}).field().sel(); ok {
+		t.Errorf("a Chrome built without a selection has one")
+	}
+}
+
+// The selection is drawn, and drawn differently from both the plain text and
+// the caret. A selection that Delete acts on but the screen does not show is
+// worse than no selection at all.
+func TestTheSelectionIsDrawn(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	m := launched(5)
+	m.SetSize(80, 30)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("abcd", "") {
+		m, _ = press(m, r)
+	}
+	m, _ = press(m, "home", "shift+right", "shift+right") // "ab", cursor on "c"
+
+	line := strings.Split(m.View(), "\n")[m.Layout().Search.Y+1]
+	s := m.chrome.Styles
+	for _, tc := range []struct {
+		what string
+		want string
+	}{
+		{"the selected characters", s.Selection.Render("a") + s.Selection.Render("b")},
+		{"the character under the caret", caretCell(s, 'c')},
+		{"the text beyond the selection", s.Value.Render("d")},
+	} {
+		if !strings.Contains(line, tc.want) {
+			t.Errorf("%s are not drawn as expected\n  line %q\n  want %q", tc.what, line, tc.want)
+		}
+	}
+}

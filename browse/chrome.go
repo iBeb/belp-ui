@@ -110,11 +110,16 @@ type Prompt struct {
 	// Caret is where the cursor sits in Text, counted in runes from its start,
 	// exactly as Chrome.Caret does in the search field.
 	Caret int
+
+	// Anchor and Sel are the selection, as Chrome.Anchor and Chrome.Sel are for
+	// the query.
+	Anchor int
+	Sel    bool
 }
 
 // field is the answer as the line editor sees it.
 func (p Prompt) field() field {
-	return field{Text: p.Text, Caret: p.Caret}
+	return field{Text: p.Text, Caret: p.Caret, Anchor: p.Anchor, Sel: p.Sel}
 }
 
 // Chrome is everything a browse screen draws except the rows themselves.
@@ -138,6 +143,13 @@ type Chrome struct {
 	// Query's length means the cell after the last character, which is where a
 	// field that has only been typed into keeps it.
 	Caret int
+
+	// Anchor is the far end of a selection, the cursor being the near one, and
+	// Sel says whether there is a selection at all. The bool is what makes the
+	// zero value "nothing selected": a sentinel anchor would leave every Chrome
+	// built as a literal with its first character picked out.
+	Anchor int
+	Sel    bool
 
 	// Columns is a header naming what the columns of the list hold, rendered by
 	// the app: it has to line up with the rows, and only the app knows where its
@@ -510,7 +522,7 @@ func (c Chrome) Search(width int) string {
 
 // field is the query as the line editor sees it.
 func (c Chrome) field() field {
-	return field{Text: c.Query, Caret: c.Caret}
+	return field{Text: c.Query, Caret: c.Caret, Anchor: c.Anchor, Sel: c.Sel}
 }
 
 // typed draws text into room cells with the cursor sitting at caret, or with no
@@ -522,9 +534,12 @@ func (c Chrome) field() field {
 func typed(s theme.Styles, f field, room int, focused bool) string {
 	cells := []rune(f.Text)
 	follow := len(cells) - 1
-	caret := -1
+	caret, selLo, selHi := -1, 0, 0
 	if focused {
 		caret = f.Caret
+		if lo, hi, ok := f.sel(); ok {
+			selLo, selHi = lo, hi
+		}
 		// One cell more than there are characters: the one the cursor sits on
 		// when it is past the end, which is where it spends most of its life.
 		cells = append(cells, ' ')
@@ -542,11 +557,16 @@ func typed(s theme.Styles, f field, room int, focused bool) string {
 		b.WriteString(s.Desc.Render(ellipsis))
 	}
 	for i := start; i < end; i++ {
-		if i == caret {
+		switch {
+		case i == caret:
+			// The caret wins the cell it is on, even inside the selection: it
+			// is the one thing on the line that says where typing will go.
 			b.WriteString(caretCell(s, cells[i]))
-			continue
+		case selLo <= i && i < selHi:
+			b.WriteString(s.Selection.Render(string(cells[i])))
+		default:
+			b.WriteString(s.Value.Render(string(cells[i])))
 		}
-		b.WriteString(s.Value.Render(string(cells[i])))
 	}
 	if cutRight {
 		b.WriteString(s.Desc.Render(ellipsis))

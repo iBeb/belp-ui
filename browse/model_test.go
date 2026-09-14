@@ -90,6 +90,22 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyBackspace, Alt: true}
 	case "alt+delete":
 		return tea.KeyMsg{Type: tea.KeyDelete, Alt: true}
+	case "shift+left":
+		return tea.KeyMsg{Type: tea.KeyShiftLeft}
+	case "shift+right":
+		return tea.KeyMsg{Type: tea.KeyShiftRight}
+	case "shift+home":
+		return tea.KeyMsg{Type: tea.KeyShiftHome}
+	case "shift+end":
+		return tea.KeyMsg{Type: tea.KeyShiftEnd}
+	case "ctrl+shift+left":
+		return tea.KeyMsg{Type: tea.KeyCtrlShiftLeft}
+	case "ctrl+shift+right":
+		return tea.KeyMsg{Type: tea.KeyCtrlShiftRight}
+	case "alt+shift+left":
+		return tea.KeyMsg{Type: tea.KeyShiftLeft, Alt: true}
+	case "alt+shift+right":
+		return tea.KeyMsg{Type: tea.KeyShiftRight, Alt: true}
 	}
 	// Anything left is typed, which is right for a letter and a trap for a
 	// combination: an unmapped "alt+left" would go in as nine characters and

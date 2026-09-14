@@ -329,7 +329,7 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		// text: a field that takes the focus but leaves the cursor where it was
 		// makes you walk it back with the arrows to edit what you pointed at.
 		if y == l.Search.Y+1 {
-			m.chrome.Caret = m.chrome.CaretAt(msg.X, l.Width)
+			m.chrome.Caret, m.chrome.Sel = m.chrome.CaretAt(msg.X, l.Width), false
 		}
 	case y >= l.List.Y && y <= l.List.Bottom():
 		if i := m.top + (y - l.List.Y); i < m.count {
@@ -411,7 +411,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	// The field answers first, and only while it has the focus: moving,
-	// deleting and typing are its business. What it declines falls
+	// selecting, deleting and typing are its business. What it declines falls
 	// through — the arrows that step out of it, Enter, the keys that drive a
 	// list — so a binding here and an edit there cannot both fire.
 	if m.chrome.Focus == FocusSearch {
@@ -552,7 +552,7 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// ^U clears from anywhere, because it is advertised in the footer and a key
 	// in the footer that only works in one band is a key that looks broken.
 	case "ctrl+u":
-		m.chrome.Query, m.chrome.Caret = "", 0
+		m.chrome.Query, m.chrome.Caret, m.chrome.Sel = "", 0, false
 
 	}
 
@@ -602,7 +602,7 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, func() tea.Msg { return CancelledMsg{Label: label} }
 
 	case "ctrl+u":
-		m.chrome.Prompt.Text, m.chrome.Prompt.Caret = "", 0
+		m.chrome.Prompt.Text, m.chrome.Prompt.Caret, m.chrome.Prompt.Sel = "", 0, false
 		return m, nil
 	}
 
@@ -610,6 +610,7 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// field uses.
 	if f, took := m.chrome.Prompt.field().key(msg); took {
 		m.chrome.Prompt.Text, m.chrome.Prompt.Caret = f.Text, f.Caret
+		m.chrome.Prompt.Anchor, m.chrome.Prompt.Sel = f.Anchor, f.Sel
 	}
 	return m, nil
 }
@@ -617,6 +618,7 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 // setField puts an edited line back into the search band.
 func (m *Model) setField(f field) {
 	m.chrome.Query, m.chrome.Caret = f.Text, f.Caret
+	m.chrome.Anchor, m.chrome.Sel = f.Anchor, f.Sel
 }
 
 // moveChip walks the cursor along the whole bar, crossing group boundaries, so

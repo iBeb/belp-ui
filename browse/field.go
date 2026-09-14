@@ -7,7 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// field is one line of editable text: what it holds and where the cursor is.
+// field is one line of editable text: what it holds, where the cursor is, and
+// what is selected.
 //
 // One type for both fields that take typing — the search band and the answer in
 // a window — because they had a switch each and the second to gain a key was
@@ -15,18 +16,59 @@ import (
 type field struct {
 	Text  string
 	Caret int
+
+	// Anchor is the fixed end of a selection, the cursor being the moving one,
+	// and Sel says whether there is one at all.
+	//
+	// A bool rather than a sentinel anchor, so that the zero value is "nothing
+	// selected". With -1 for none, every Chrome and Prompt an app builds as a
+	// literal would come with its first character selected, and the one that
+	// forgot would be found by a user rather than by a compiler.
+	Anchor int
+	Sel    bool
+}
+
+// sel is the selected range as rune offsets, low end first.
+func (f field) sel() (lo, hi int, ok bool) {
+	if !f.Sel || f.Anchor == f.Caret {
+		return 0, 0, false
+	}
+	if f.Anchor < f.Caret {
+		return f.Anchor, f.Caret, true
+	}
+	return f.Caret, f.Anchor, true
+}
+
+// cut removes the selection and leaves the cursor where it began.
+func (f field) cut() field {
+	lo, hi, ok := f.sel()
+	if !ok {
+		return f
+	}
+	r := []rune(f.Text)
+	f.Text, f.Caret, f.Sel = string(r[:lo])+string(r[hi:]), lo, false
+	return f
 }
 
 // move puts the cursor at to, stopping at either end rather than wrapping: a
 // cursor that reappears at the far end has lost the one thing it was telling
 // you.
-func (f field) move(to int) field {
+// Holding shift keeps or starts a selection; without it the selection goes,
+// which is what makes an arrow the way out of one.
+func (f field) move(to int, keep bool) field {
+	switch {
+	case !keep:
+		f.Sel = false
+	case !f.Sel:
+		f.Anchor, f.Sel = f.Caret, true // it starts where the cursor was
+	}
 	f.Caret = clamp(to, 0, len([]rune(f.Text)))
 	return f
 }
 
-// insert puts s in at the cursor.
+// insert replaces the selection with s, or puts s in at the cursor.
 func (f field) insert(s string) field {
+	f = f.cut()
 	f.Text, f.Caret = insertAt(f.Text, f.Caret, s)
 	return f
 }
@@ -72,7 +114,7 @@ func (f field) drop(to int) field {
 	r := []rune(f.Text)
 	lo, hi := min(f.Caret, to), max(f.Caret, to)
 	lo, hi = clamp(lo, 0, len(r)), clamp(hi, 0, len(r))
-	f.Text, f.Caret = string(r[:lo])+string(r[hi:]), lo
+	f.Text, f.Caret, f.Sel = string(r[:lo])+string(r[hi:]), lo, false
 	return f
 }
 
@@ -82,36 +124,65 @@ func (f field) drop(to int) field {
 func (f field) key(msg tea.KeyMsg) (field, bool) {
 	switch msg.String() {
 	case "left":
-		return f.move(f.Caret - 1), true
+		return f.move(f.Caret-1, false), true
 	case "right":
-		return f.move(f.Caret + 1), true
+		return f.move(f.Caret+1, false), true
+	case "shift+left":
+		return f.move(f.Caret-1, true), true
+	case "shift+right":
+		return f.move(f.Caret+1, true), true
 	// Both spellings of a word skip: Terminal.app sends ⌥← as a meta escape and
 	// ⌃← as a CSI sequence, and which one a keyboard produces is not something
 	// an app gets to choose.
 	case "alt+left", "ctrl+left":
-		return f.move(f.wordLeft()), true
+		return f.move(f.wordLeft(), false), true
 	case "alt+right", "ctrl+right":
-		return f.move(f.wordRight()), true
+		return f.move(f.wordRight(), false), true
+	case "alt+shift+left", "ctrl+shift+left":
+		return f.move(f.wordLeft(), true), true
+	case "alt+shift+right", "ctrl+shift+right":
+		return f.move(f.wordRight(), true), true
 
 	case "home", "ctrl+a":
-		return f.move(0), true
+		return f.move(0, false), true
 	case "end", "ctrl+e":
-		return f.move(len([]rune(f.Text))), true
+		return f.move(len([]rune(f.Text)), false), true
+	case "shift+home":
+		return f.move(0, true), true
+	case "shift+end":
+		return f.move(len([]rune(f.Text)), true), true
 
+	// Each takes the selection where there is one, rather than a character out
+	// of the middle of it and the selection silently with it.
 	case "backspace":
+		if _, _, ok := f.sel(); ok {
+			return f.cut(), true
+		}
 		f.Text, f.Caret = backspaceAt(f.Text, f.Caret)
 		return f, true
 	case "delete":
+		if _, _, ok := f.sel(); ok {
+			return f.cut(), true
+		}
 		f.Text, f.Caret = deleteAt(f.Text, f.Caret)
 		return f, true
 	// Deleting by word mirrors moving by word, so what a skip crosses is what
 	// the same key with a delete on it removes. ^W is left as it was: it is the
 	// shell's key and means the shell's word, which ends at a space.
 	case "alt+backspace":
+		if _, _, ok := f.sel(); ok {
+			return f.cut(), true
+		}
 		return f.drop(f.wordLeft()), true
 	case "alt+delete":
+		if _, _, ok := f.sel(); ok {
+			return f.cut(), true
+		}
 		return f.drop(f.wordRight()), true
 	case "ctrl+w":
+		if _, _, ok := f.sel(); ok {
+			return f.cut(), true
+		}
 		f.Text, f.Caret = dropWordAt(f.Text, f.Caret)
 		return f, true
 	}
