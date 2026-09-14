@@ -282,3 +282,47 @@ func TestKeysAreRightAlignedAgainstTheirValues(t *testing.T) {
 		t.Errorf("KeyWidth = %d, want the widest key", got)
 	}
 }
+
+// The option not taken is still an option, and has to be readable to be one.
+// Drawn at the weight of a border it is a word nobody can read.
+func TestTheUnchosenOptionIsReadable(t *testing.T) {
+	s := theme.Default()
+	r := Radio{Options: []string{"read only", "read · write"}, Active: 1}
+
+	for _, focused := range []bool{false, true} {
+		line := r.Render(s, focused)
+		at := strings.Index(line, "read only")
+		if at < 0 {
+			t.Fatalf("focused=%v: the option is not there", focused)
+		}
+		// Whatever style opens the word, it is not the one the borders use.
+		opened := line[:at]
+		if strings.HasSuffix(opened, render(s.Rule, "")) {
+			t.Errorf("focused=%v: the unchosen word is drawn in the rule colour", focused)
+		}
+		if !strings.Contains(opened, colourOf(s.Desc)) {
+			t.Errorf("focused=%v: the unchosen word is not drawn as secondary text: %q",
+				focused, opened)
+		}
+	}
+
+	// And it reads the same whether or not the radio has the keys: which option
+	// is set is what the drawing says, not where the cursor happens to be.
+	before := plain(r.Render(s, false))
+	after := plain(r.Render(s, true))
+	if before != after {
+		t.Errorf("focus changed the text: %q vs %q", before, after)
+	}
+}
+
+func render(st lipgloss.Style, text string) string { return st.Render(text) }
+
+// colourOf is the escape a style opens with, so a test can say which colour a
+// run of text was drawn in rather than guessing from how it looks.
+func colourOf(st lipgloss.Style) string {
+	out := st.Render("x")
+	if i := strings.Index(out, "x"); i > 0 {
+		return out[:i]
+	}
+	return ""
+}

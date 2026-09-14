@@ -220,11 +220,12 @@ func (r Radio) Render(s theme.Styles, focused bool) string {
 			parts[i] = chosen.Render(radioOn + " " + opt)
 			continue
 		}
-		mark := s.Rule
-		if focused {
-			mark = s.Desc
-		}
-		parts[i] = mark.Render(radioOff + " " + opt)
+		// The option you have not taken is still an option, and has to be
+		// readable to be one. Its mark takes the rule colour and its word does
+		// not: a word drawn at the weight of a border is a word nobody can read,
+		// and whether this radio has the keys is said by the chosen option and
+		// by the card around it.
+		parts[i] = s.Rule.Render(radioOff) + " " + s.Desc.Render(opt)
 	}
 	return strings.Join(parts, "   ")
 }
