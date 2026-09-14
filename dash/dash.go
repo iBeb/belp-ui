@@ -124,7 +124,7 @@ func Buttons(s theme.Styles, row []Button, focus, width int) []string {
 	if len(row) == 0 {
 		return []string{"", "", ""}
 	}
-	row = stretch(row, width, gap)
+	row = Stretch(row, width, gap)
 
 	drawn := make([][]string, len(row))
 	for i, b := range row {
@@ -141,9 +141,15 @@ func Buttons(s theme.Styles, row []Button, focus, width int) []string {
 	return out
 }
 
-// stretch hands the slack out in proportion, and gives the rounding to the last
-// button so the row lands exactly on the width rather than a cell short.
-func stretch(row []Button, width, gap int) []Button {
+// Stretch is the widths a row of buttons will be drawn at, given the room.
+//
+// Exported because whoever draws the row also has to know where each button
+// landed, for a click — and working that out a second time is how a click starts
+// landing on the button next to the one it was aimed at.
+//
+// The slack goes out in proportion, and the rounding to the last button so the
+// row lands exactly on the width rather than a cell short.
+func Stretch(row []Button, width, gap int) []Button {
 	if width <= 0 {
 		return row
 	}

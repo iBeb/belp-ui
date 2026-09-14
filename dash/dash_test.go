@@ -252,7 +252,7 @@ func TestButtonsStretchToFillTheirRow(t *testing.T) {
 func TestTheStretchKeepsTheProportions(t *testing.T) {
 	s := theme.Default()
 	row := []Button{{Label: "▮▮ pause"}, {Label: Info}}
-	wide := stretch(row, 60, 1)
+	wide := Stretch(row, 60, 1)
 	if wide[0].Width <= wide[1].Width {
 		t.Errorf("the main button is %d wide and the mark %d", wide[0].Width, wide[1].Width)
 	}
@@ -260,7 +260,7 @@ func TestTheStretchKeepsTheProportions(t *testing.T) {
 		t.Errorf("the stretched row is %d wide, want 60", got)
 	}
 	// A row already wider than the space is left alone rather than squeezed.
-	if tight := stretch(row, 4, 1); tight[0].Width != 0 {
+	if tight := Stretch(row, 4, 1); tight[0].Width != 0 {
 		t.Error("a row with no room was stretched anyway")
 	}
 	_ = s
