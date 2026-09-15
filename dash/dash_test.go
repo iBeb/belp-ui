@@ -442,3 +442,77 @@ func TestAToggleSaysWhetherItIsOnWithoutExcludingAnything(t *testing.T) {
 			after(on.Render(s, false)), after(off.Render(s, false)))
 	}
 }
+
+// A popup that lists things gives each its own switch, and the focus runs over
+// the rows before the buttons because that is the order they are drawn.
+func TestAPopupListsRowsWithTheirOwnSwitches(t *testing.T) {
+	s := theme.Default()
+	p := Popup{Title: "web", Body: []string{"branch CCC-4456"},
+		Rows: []Row{
+			{Toggle: Toggle{Label: "db", On: true, Tone: Good}, Say: "running"},
+			{Toggle: Toggle{Label: "clickhouse"}, Say: "exited", Note: "optional"},
+		},
+		Buttons: []Button{{Label: "close"}}}
+
+	if got := p.Stops(); got != 3 {
+		t.Errorf("Stops() = %d, want two rows and a button", got)
+	}
+	box := p.Render(s, p.Wide())
+	flat := strings.Join(box, "\n")
+	for _, want := range []string{"db", "running", "clickhouse", "exited", "optional"} {
+		if !strings.Contains(plain(flat), want) {
+			t.Errorf("the list does not carry %q:\n%s", want, plain(flat))
+		}
+	}
+	for _, line := range box {
+		if got := lipgloss.Width(line); got != p.Wide() {
+			t.Errorf("a line is %d wide, want %d: %q", got, p.Wide(), plain(line))
+		}
+	}
+
+	// A row being switched says so, because a row that says nothing for the
+	// several seconds a container takes looks broken.
+	p.Rows[1].Busy = "starting…"
+	if !strings.Contains(plain(strings.Join(p.Render(s, p.Wide()), "\n")), "starting…") {
+		t.Error("a row being switched does not say so")
+	}
+}
+
+// A click on a row has to land on the row that was drawn there.
+func TestAClickFindsThePopupRowItWasDrawnOn(t *testing.T) {
+	s := theme.Default()
+	p := Popup{Title: "web", Body: []string{"branch CCC-4456"},
+		Rows: []Row{
+			{Toggle: Toggle{Label: "db", On: true}, Say: "running"},
+			{Toggle: Toggle{Label: "web", On: true}, Say: "running"},
+			{Toggle: Toggle{Label: "clickhouse"}, Say: "exited"},
+		},
+		Buttons: []Button{{Label: "close"}}}
+
+	box := p.Render(s, p.Wide())
+	screen := make([]string, 30)
+	_, at := Over(screen, box, 80, 30)
+
+	for want := range p.Rows {
+		// The line each row was drawn on, found in the rendering rather than
+		// assumed: if these two ever disagree the click lands on the wrong one.
+		line := -1
+		for i, l := range box {
+			if strings.Contains(plain(l), p.Rows[want].Toggle.Label+" ") &&
+				strings.Contains(plain(l), p.Rows[want].Say) {
+				line = i
+			}
+		}
+		if line < 0 {
+			t.Fatalf("row %d was not drawn", want)
+		}
+		got, ok := at.RowAt(p, at.X+4, at.Y+line)
+		if !ok || got != want {
+			t.Errorf("a click on row %d found %d (ok=%v)", want, got, ok)
+		}
+	}
+	// The body above them is not a row.
+	if _, ok := at.RowAt(p, at.X+4, at.Y+2); ok {
+		t.Error("a click on the body found a row")
+	}
+}
