@@ -543,3 +543,36 @@ func TestAPopupCentresItsButtonRow(t *testing.T) {
 		t.Errorf("the row sits %d from the left and %d from the right: %q", left, right, row)
 	}
 }
+
+// A mark and the word it belongs to are one thing. Drawn in two styles — the
+// mark at the weight of a border, the word at the weight of text — the mark
+// reads as part of the frame rather than as the thing being chosen.
+func TestAMarkIsDrawnLikeTheWordItBelongsTo(t *testing.T) {
+	s := theme.Default()
+
+	for _, c := range []struct {
+		what string
+		line string
+		mark string
+	}{
+		{"an unchosen radio", Radio{Options: []string{"read only", "read · write"},
+			Active: 1}.Render(s, false), radioOff},
+		{"a chosen radio", Radio{Options: []string{"read only"}, Active: 0,
+			Tone: Good}.Render(s, false), radioOn},
+		{"a toggle that is off", Toggle{Label: "clickhouse"}.Render(s, false), toggleOff},
+		{"a toggle that is on", Toggle{Label: "clickhouse", On: true,
+			Tone: Good}.Render(s, false), toggleOn},
+	} {
+		at := strings.Index(c.line, c.mark)
+		if at < 0 {
+			t.Errorf("%s: no mark drawn", c.what)
+			continue
+		}
+		// Whatever run the mark is in reaches the word without an escape between
+		// them: one style, one run.
+		word := c.line[at+len(c.mark):]
+		if i := strings.Index(word, "\x1b"); i >= 0 && strings.TrimSpace(plain(word[:i])) == "" {
+			t.Errorf("%s: the style changes between the mark and its word: %q", c.what, c.line)
+		}
+	}
+}

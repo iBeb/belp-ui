@@ -220,12 +220,11 @@ func (r Radio) Render(s theme.Styles, focused bool) string {
 			parts[i] = chosen.Render(radioOn + " " + opt)
 			continue
 		}
-		// The option you have not taken is still an option, and has to be
-		// readable to be one. Its mark takes the rule colour and its word does
-		// not: a word drawn at the weight of a border is a word nobody can read,
-		// and whether this radio has the keys is said by the chosen option and
-		// by the card around it.
-		parts[i] = s.Rule.Render(radioOff) + " " + s.Desc.Render(opt)
+		// The mark and the word it belongs to are one thing, drawn in one style.
+		// Split between two — a mark at the weight of a border beside a word at
+		// the weight of text — the mark reads as part of the frame rather than
+		// as the thing you are choosing between.
+		parts[i] = s.Desc.Render(radioOff + " " + opt)
 	}
 	return strings.Join(parts, "   ")
 }
@@ -256,6 +255,10 @@ const (
 )
 
 // Render draws the toggle.
+//
+// The box and its label in one style, for the same reason a radio's mark is: a
+// box drawn at the weight of a border beside a word at the weight of text reads
+// as part of the frame rather than as the switch it is.
 func (g Toggle) Render(s theme.Styles, focused bool) string {
 	box, text := toggleOff, s.Desc
 	if g.On {
@@ -264,11 +267,7 @@ func (g Toggle) Render(s theme.Styles, focused bool) string {
 	if focused {
 		text = text.Bold(true).Underline(true)
 	}
-	mark := s.Rule
-	if g.On {
-		mark = g.Tone.style(s)
-	}
-	return mark.Render(box) + " " + text.Render(g.Label)
+	return text.Render(box + " " + g.Label)
 }
 
 // Wide is how many cells a toggle takes.
