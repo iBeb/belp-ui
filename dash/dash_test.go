@@ -516,3 +516,30 @@ func TestAClickFindsThePopupRowItWasDrawnOn(t *testing.T) {
 		t.Error("a click on the body found a row")
 	}
 }
+
+// The button row is the one thing in a popup that is not a list of facts, and a
+// line of boxes hard against the left margin reads as the start of a column.
+func TestAPopupCentresItsButtonRow(t *testing.T) {
+	s := theme.Default()
+	p := Popup{Title: "web", Body: []string{strings.Repeat("x", 50)},
+		Buttons: []Button{{Label: "▸ start"}, {Label: "close"}}}
+
+	box := p.Render(s, p.Wide())
+	var row string
+	for _, line := range box {
+		if strings.Contains(plain(line), "▸ start") {
+			row = plain(line)
+		}
+	}
+	if row == "" {
+		t.Fatal("the buttons were not drawn")
+	}
+	// The gap inside the border is the same on both sides, give or take the odd
+	// cell that cannot be split.
+	body := strings.TrimSuffix(strings.TrimPrefix(row, "│"), "│")
+	left := len(body) - len(strings.TrimLeft(body, " "))
+	right := len(body) - len(strings.TrimRight(body, " "))
+	if left-right > 1 || right-left > 1 {
+		t.Errorf("the row sits %d from the left and %d from the right: %q", left, right, row)
+	}
+}

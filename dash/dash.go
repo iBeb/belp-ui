@@ -426,6 +426,11 @@ func (g Gauge) colours(s theme.Styles) (filled, track lipgloss.Style) {
 	return filled, track
 }
 
+// centre puts a label in the middle of the room it has.
+//
+// Measured with lipgloss rather than by counting runes, so the escape sequences
+// a styled label carries are not mistaken for width — a centred string padded by
+// its byte length drifts further off centre the more colour it has in it.
 func centre(label string, width int) string {
 	room := width - lipgloss.Width(label)
 	if room <= 0 {

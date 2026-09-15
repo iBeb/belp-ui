@@ -105,8 +105,11 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	}
 	if len(p.Buttons) > 0 {
 		line("")
+		// Centred in the box rather than pushed against its left edge: the row
+		// is the one thing in a popup that is not a list of facts, and a line of
+		// boxes hard against one margin reads as the start of another column.
 		for _, row := range Buttons(s, p.Buttons, p.Focus-len(p.Rows), 0) {
-			line(row)
+			line(centre(row, inner-2))
 		}
 	}
 	if p.Note != "" {
