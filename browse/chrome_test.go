@@ -137,9 +137,9 @@ func TestHeaderDropsTheStatusBeforeTheApp(t *testing.T) {
 	if !strings.Contains(wide, "belp") || !strings.Contains(wide, "77 pull requests") {
 		t.Errorf("Header(80) = %q, want both the crumbs and the status", wide)
 	}
-	// The status is right-aligned, so it ends where the header ends.
-	if lipgloss.Width(wide) != 80 {
-		t.Errorf("Header(80) is %d cells, want the status pushed to the right edge", lipgloss.Width(wide))
+	// The status is right-aligned, a cell short of the edge like every other row.
+	if lipgloss.Width(wide) != 79 {
+		t.Errorf("Header(80) is %d cells, want the status a cell short of the edge", lipgloss.Width(wide))
 	}
 
 	narrow := c.Header(20)

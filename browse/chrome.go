@@ -263,12 +263,14 @@ func (c Chrome) Header(width int) string {
 	}
 
 	// The status is the first thing to go: it is a count, and the app's name is
-	// how you know which app you are looking at.
+	// how you know which app you are looking at. It stops a cell short of the
+	// edge, the same margin the rows keep, rather than against the frame.
 	status := s.Desc.Render(c.Status)
-	if c.Status == "" || lipgloss.Width(crumbs)+2+lipgloss.Width(status) > width {
+	right := width - margin
+	if c.Status == "" || lipgloss.Width(crumbs)+2+lipgloss.Width(status) > right {
 		return fit(crumbs, width)
 	}
-	gap := width - lipgloss.Width(crumbs) - lipgloss.Width(status)
+	gap := right - lipgloss.Width(crumbs) - lipgloss.Width(status)
 	return crumbs + strings.Repeat(" ", gap) + status
 }
 

@@ -409,3 +409,36 @@ func TestAPopupKeepsItsFrameWhateverIsPutInIt(t *testing.T) {
 		}
 	}
 }
+
+// A toggle is its own thing, not one of a set: two of them on at once is an
+// ordinary state, where two radios filled is a choice that has gone wrong.
+func TestAToggleSaysWhetherItIsOnWithoutExcludingAnything(t *testing.T) {
+	s := theme.Default()
+	on := Toggle{Label: "clickhouse", On: true, Tone: Good}
+	off := Toggle{Label: "clickhouse"}
+
+	for _, c := range []struct {
+		what string
+		g    Toggle
+		box  string
+	}{{"on", on, toggleOn}, {"off", off, toggleOff}} {
+		for _, focused := range []bool{false, true} {
+			line := c.g.Render(s, focused)
+			if got := lipgloss.Width(line); got != c.g.Wide() {
+				t.Errorf("%s: %d wide, Wide() says %d", c.what, got, c.g.Wide())
+			}
+			if !strings.HasPrefix(plain(line), c.box) {
+				t.Errorf("%s: drawn with %q", c.what, plain(line))
+			}
+			if !strings.Contains(plain(line), "clickhouse") {
+				t.Errorf("%s: lost its label", c.what)
+			}
+		}
+	}
+	// The state is in the drawing, and the text does not move with it.
+	after := func(line string) string { return string([]rune(plain(line))[1:]) }
+	if after(on.Render(s, false)) != after(off.Render(s, false)) {
+		t.Errorf("turning a toggle on moved its label: %q vs %q",
+			after(on.Render(s, false)), after(off.Render(s, false)))
+	}
+}

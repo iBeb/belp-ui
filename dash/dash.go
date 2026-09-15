@@ -239,6 +239,41 @@ func (r Radio) Wide() int {
 	return n
 }
 
+// Toggle is one thing that is on or off, on its own.
+//
+// A checkbox rather than a radio: these do not exclude each other, and a filled
+// dot beside another filled dot reads as a choice that has gone wrong.
+type Toggle struct {
+	Label string
+	On    bool
+	Tone  Tone
+}
+
+// The box of a toggle, in its two states.
+const (
+	toggleOn  = "■"
+	toggleOff = "□"
+)
+
+// Render draws the toggle.
+func (g Toggle) Render(s theme.Styles, focused bool) string {
+	box, text := toggleOff, s.Desc
+	if g.On {
+		box, text = toggleOn, g.Tone.style(s)
+	}
+	if focused {
+		text = text.Bold(true).Underline(true)
+	}
+	mark := s.Rule
+	if g.On {
+		mark = g.Tone.style(s)
+	}
+	return mark.Render(box) + " " + text.Render(g.Label)
+}
+
+// Wide is how many cells a toggle takes.
+func (g Toggle) Wide() int { return 2 + lipgloss.Width(g.Label) }
+
 // Pair is one fact: what it is, and what it says.
 type Pair struct {
 	Key   string
