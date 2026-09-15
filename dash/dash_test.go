@@ -576,3 +576,17 @@ func TestAMarkIsDrawnLikeTheWordItBelongsTo(t *testing.T) {
 		}
 	}
 }
+
+// Every tone has a colour of its own: two acts that mean different things and
+// draw the same are two acts nobody can tell apart at a glance.
+func TestEveryToneIsItsOwnColour(t *testing.T) {
+	p := theme.DefaultPalette()
+	seen := map[string]Tone{}
+	for _, tone := range []Tone{Plain, Good, Care, Grave, Again} {
+		got := tone.colour(p)
+		if first, ok := seen[got.Dark]; ok {
+			t.Errorf("tone %d and tone %d are both %q", first, tone, got.Dark)
+		}
+		seen[got.Dark] = tone
+	}
+}

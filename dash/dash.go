@@ -34,6 +34,9 @@ const (
 	Care
 	// Grave is destructive.
 	Grave
+	// Again ends a thing and begins it again. None of the three above: not the
+	// safe one, not a warning, and not destructive, but not nothing either.
+	Again
 )
 
 func (t Tone) style(s theme.Styles) lipgloss.Style {
@@ -44,6 +47,8 @@ func (t Tone) style(s theme.Styles) lipgloss.Style {
 		return s.Warn
 	case Grave:
 		return s.Danger
+	case Again:
+		return s.Cycle
 	default:
 		return s.Item
 	}
@@ -57,6 +62,8 @@ func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 		return p.Warn
 	case Grave:
 		return p.Danger
+	case Again:
+		return p.Cycle
 	default:
 		return p.Accent
 	}

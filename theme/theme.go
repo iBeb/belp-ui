@@ -47,6 +47,10 @@ type Palette struct {
 	Success lipgloss.AdaptiveColor
 	Warn    lipgloss.AdaptiveColor
 	Danger  lipgloss.AdaptiveColor // destructive and irreversible
+	// Cycle is an act that ends a thing and begins it again — a restart. Its own
+	// colour because it is none of the three above: not the safe one, not a
+	// warning, and not destructive, but not nothing either.
+	Cycle lipgloss.AdaptiveColor
 
 	// A life cycle, in the order things travel through it: begun, under way,
 	// landed, and spent. Success is the landed step — a thing that arrived is
@@ -86,6 +90,7 @@ func DefaultPalette() Palette {
 		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
 		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
 		Danger:  lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
+		Cycle:   lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
 		Begun:   lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
 		Flight:  lipgloss.AdaptiveColor{Light: "#0f766e", Dark: "#73daca"},
 		Spent:   lipgloss.AdaptiveColor{Light: "#767676", Dark: "#8a92b2"},
@@ -127,6 +132,7 @@ type Styles struct {
 	Success   lipgloss.Style
 	Warn      lipgloss.Style
 	Danger    lipgloss.Style
+	Cycle     lipgloss.Style
 	Begun     lipgloss.Style
 	Flight    lipgloss.Style
 	Spent     lipgloss.Style
@@ -200,6 +206,7 @@ func New(p Palette) Styles {
 		Success: fg(p.Success),
 		Warn:    fg(p.Warn),
 		Danger:  fg(p.Danger),
+		Cycle:   fg(p.Cycle),
 		Begun:   fg(p.Begun),
 		Flight:  fg(p.Flight),
 		Spent:   fg(p.Spent),
@@ -230,7 +237,7 @@ func (p Palette) AtRest() Palette {
 	q := p
 	for _, c := range []*AdaptiveColor{
 		&q.Text, &q.Dim, &q.Faint, &q.Quiet, &q.Accent, &q.Key, &q.Resting,
-		&q.Success, &q.Warn, &q.Danger,
+		&q.Success, &q.Warn, &q.Danger, &q.Cycle,
 		&q.Begun, &q.Flight, &q.Spent, &q.Voice, &q.Judge,
 	} {
 		*c = fade(*c, p.Ground, Rest)
@@ -292,7 +299,7 @@ func (s Styles) ForRow(selected bool) Styles {
 	}
 	for _, f := range []*lipgloss.Style{
 		&s.Item, &s.Desc, &s.Label, &s.Value,
-		&s.Success, &s.Warn, &s.Danger,
+		&s.Success, &s.Warn, &s.Danger, &s.Cycle,
 		&s.Begun, &s.Flight, &s.Spent, &s.Voice, &s.Judge,
 	} {
 		*f = s.Selected
