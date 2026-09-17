@@ -745,10 +745,10 @@ func TestAPopupTakesTheMarkTheAppGivesIt(t *testing.T) {
 	}
 }
 
-// A close mark does not need a label, it needs to be recognised — and the
-// colour every desktop has used for it since the traffic lights is the fastest
-// way to do that.
-func TestTheCloseMarkIsDrawnInTheColourOfClosing(t *testing.T) {
+// The mark belongs to the window's chrome, so it is drawn in the colour of the
+// frame: red on a border that is blue everywhere else reads as a warning about
+// the window rather than as the way out of it.
+func TestTheCloseMarkIsDrawnInTheColourOfTheFrame(t *testing.T) {
 	s := theme.Default()
 	top := Popup{Title: "web"}.Render(s, 40)[0]
 
@@ -756,9 +756,16 @@ func TestTheCloseMarkIsDrawnInTheColourOfClosing(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no mark was drawn")
 	}
-	if !strings.Contains(top[:at], background(s.Palette.Danger.Dark)) &&
-		!strings.Contains(top[:at], foreground(s.Palette.Danger.Dark)) {
-		t.Errorf("the mark is not drawn in the danger colour: %q", top[:at])
+	rule := s.Selected.Render("─")
+	paint := rule[:strings.Index(rule, "─")]
+	if paint == "" {
+		t.Fatal("the frame is drawn in no colour at all")
+	}
+	if !strings.Contains(top[:at], paint) {
+		t.Errorf("the mark is not drawn in the colour of the frame: %q", top[:at])
+	}
+	if strings.Contains(top[:at], foreground(s.Palette.Danger.Dark)) {
+		t.Errorf("the mark is still drawn in the danger colour: %q", top[:at])
 	}
 }
 

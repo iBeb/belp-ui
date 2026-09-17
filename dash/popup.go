@@ -100,15 +100,16 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	// Spaces either side of nothing is a two-cell gap at the top left, which
 	// reads as a dent in the border rather than as room for a word.
 	// The corner, then the way out, then the border carries on with the title.
-	// A window you can close says so where a pointer already goes to look, and
-	// in the colour every desktop has used for it since the traffic lights: a
-	// close mark does not need a label, it needs to be recognised.
+	// A window you can close says so where a pointer already goes to look. In
+	// the colour of the frame rather than in red: the mark is part of the
+	// window's chrome, and red on a border that is blue everywhere else reads
+	// as a warning about the window rather than as the way out of it.
 	shut := ""
 	if !p.Fixed {
 		// Held off the corner and off the border either side, so the mark is its
 		// own thing: crowded against the line it reads as part of the frame, and
 		// crowded against the words as a bullet belonging to the title.
-		shut = " " + s.Danger.Render(p.shut()) + " " + edge.Render("─")
+		shut = " " + edge.Render(p.shut()) + " " + edge.Render("─")
 	}
 	head := ""
 	if p.Title != "" {
