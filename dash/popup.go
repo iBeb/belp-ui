@@ -69,7 +69,8 @@ func (p Popup) Wide() int {
 	// whose title no longer fits on it.
 	want := lipgloss.Width(p.Title) + 4
 	if !p.Fixed {
-		want += lipgloss.Width(p.shut()) + 1 // the mark, and the border after it
+		// The mark, a space either side of it, and the border it hands back to.
+		want += lipgloss.Width(p.shut()) + 3
 	}
 	for _, line := range p.Body {
 		want = max(want, lipgloss.Width(line)+4)
@@ -104,9 +105,10 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	// close mark does not need a label, it needs to be recognised.
 	shut := ""
 	if !p.Fixed {
-		// A length of border after it, so the mark is its own thing: set against
-		// the title it reads as a bullet belonging to the words.
-		shut = s.Danger.Render(p.shut()) + edge.Render("─")
+		// Held off the corner and off the border either side, so the mark is its
+		// own thing: crowded against the line it reads as part of the frame, and
+		// crowded against the words as a bullet belonging to the title.
+		shut = " " + s.Danger.Render(p.shut()) + " " + edge.Render("─")
 	}
 	head := ""
 	if p.Title != "" {
@@ -323,10 +325,10 @@ func (s Spot) ShutAt(p Popup, x, y int) bool {
 	}
 	// The corner counts as part of it. A glyph is one cell wide, which is a hard
 	// thing to hit with a pointer, and the corner beside it means nothing else.
-	// The corner and the mark, not the border after it: that length of line is
-	// what keeps the mark from reading as part of the title, and pressing it
-	// should do what pressing any other stretch of border does.
-	return y == s.Y && x >= s.X && x < s.X+1+lipgloss.Width(p.shut())
+	// The corner, the space before the mark, and the mark: a pointer aimed at a
+	// small round thing lands around it as often as on it. Not the border after
+	// the second space, which is border like any other.
+	return y == s.Y && x >= s.X && x < s.X+2+lipgloss.Width(p.shut())
 }
 
 // shut is the mark this popup draws in its corner.

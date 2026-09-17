@@ -665,17 +665,19 @@ func TestAPopupWithNoTitleHasAnUnbrokenTopEdge(t *testing.T) {
 
 	// The corner, the way out, then an unbroken rule: no title must not leave a
 	// two-cell gap where a word would have been.
-	if !strings.HasPrefix(top, "╭"+Shut+"──") {
+	if !strings.HasPrefix(top, "╭ "+Shut+" ──") {
 		t.Errorf("the top edge starts %q", top)
 	}
-	if strings.Contains(top, " ") {
-		t.Errorf("the top edge has a gap in it: %q", top)
+	// Past the mark and its spaces, the rule is unbroken: no title must not
+	// leave a gap where a word would have been.
+	if strings.Contains(top[len("╭ "+Shut+" "):], " ") {
+		t.Errorf("the rule has a gap in it: %q", top)
 	}
 	// And a title still gets its room, after the mark.
 	// A length of border between the mark and the words, so the mark is not
 	// read as a bullet belonging to them.
 	titled := plain(Popup{Title: "repair web"}.Render(s, 40)[0])
-	if !strings.HasPrefix(titled, "╭"+Shut+"─ repair web ─") {
+	if !strings.HasPrefix(titled, "╭ "+Shut+" ─ repair web ─") {
 		t.Errorf("a titled edge reads %q", titled)
 	}
 	// A window that cannot be closed does not offer a way out.
@@ -694,7 +696,7 @@ func TestAClickOnTheCornerFindsTheWayOut(t *testing.T) {
 	screen := make([]string, 20)
 	_, at := Over(screen, box, 60, 20)
 
-	for _, x := range []int{at.X + 1, at.X + 2, at.X + 3} {
+	for _, x := range []int{at.X, at.X + 1, at.X + 2, at.X + 3, at.X + 4} {
 		if !at.ShutAt(p, x, at.Y) {
 			t.Errorf("a click at column %d of the top line missed the way out", x-at.X)
 		}
@@ -736,8 +738,9 @@ func TestAPopupTakesTheMarkTheAppGivesIt(t *testing.T) {
 	if !at.ShutAt(p, at.X+1, at.Y) {
 		t.Error("a click on the mark missed it")
 	}
-	// One cell wide, plus the corner: the cell after that is the border.
-	if at.ShutAt(p, at.X+3, at.Y) {
+	// One cell wide, plus the corner and the space: the cell after that is
+	// border like any other.
+	if at.ShutAt(p, at.X+4, at.Y) {
 		t.Error("the hit area is still the width of the default mark")
 	}
 }
