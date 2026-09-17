@@ -106,11 +106,9 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	if len(p.Buttons) > 0 {
 		line("")
 		// Centred in the box rather than pushed against its left edge: the row
-		// is the one thing in a popup that is not a list of facts, and a line of
-		// boxes hard against one margin reads as the start of another column.
-		for _, row := range Buttons(s, p.Buttons, p.Focus-len(p.Rows), 0) {
-			line(centre(row, inner-2))
-		}
+		// is the one thing in a popup that is not a list of facts, and a row of
+		// buttons hard against one margin reads as the start of another column.
+		line(centre(Buttons(s, p.Buttons, p.Focus-len(p.Rows), 0), inner-2))
 	}
 	if p.Note != "" {
 		line("")
@@ -159,25 +157,31 @@ func (s Spot) Holds(x, y int) bool {
 
 // ButtonAt is which of the popup's buttons covers a point, for a click.
 //
-// Worked out from the same numbers that drew them: the buttons sit on the three
-// lines above the note and the bottom padding, and each is as wide as it asked
-// to be.
+// Worked out from the same numbers that drew them: one line, centred in the
+// inner width, counted back from the bottom edge past the padding and the note.
+// A button is a single filled line now rather than three lines in a box, and
+// counting three put every click a row above the row it was aimed at.
 func (s Spot) ButtonAt(p Popup, st theme.Styles, x, y int) (int, bool) {
 	if len(p.Buttons) == 0 {
 		return 0, false
 	}
 	rows := len(p.Render(st, s.W))
-	// The buttons are three lines, sitting above the note and the last padding
-	// line and the bottom edge.
-	bottom := rows - 2
+	// From the end: the bottom edge, the last pad, then the note and its pad
+	// where there is one, and the buttons above that.
+	line := rows - 3
 	if p.Note != "" {
-		bottom -= 2
+		line = rows - 5
 	}
-	top := bottom - 3
-	if y < s.Y+top || y >= s.Y+bottom {
+	if y != s.Y+line {
 		return 0, false
 	}
-	at := x - (s.X + 2)
+
+	inner := s.W - 2
+	wide := len(p.Buttons) - 1
+	for _, b := range p.Buttons {
+		wide += b.Wide()
+	}
+	at := x - (s.X + 2 + max(0, (inner-2-wide)/2))
 	for i, b := range p.Buttons {
 		if at < 0 {
 			return 0, false
@@ -188,6 +192,21 @@ func (s Spot) ButtonAt(p Popup, st theme.Styles, x, y int) (int, bool) {
 		at -= b.Wide() + 1
 	}
 	return 0, false
+}
+
+// buttonsLeft is how far the row of buttons is inset from the content edge.
+//
+// The renderer centres the row, so the click has to know the same offset. Asked
+// of one place rather than worked out twice: a click that lands on the button
+// next to the one it was aimed at is what two copies of this arithmetic drifting
+// apart looks like.
+func (p Popup) buttonsLeft(st theme.Styles) int {
+	inner := p.Wide() - 2
+	room := inner - 2 - lipgloss.Width(Buttons(st, p.Buttons, -1, 0))
+	if room <= 0 {
+		return 0
+	}
+	return room / 2
 }
 
 // row draws one line of the list: the switch, then what it is doing.

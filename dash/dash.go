@@ -77,11 +77,12 @@ func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 // This one is an ordinary letterform in a circle, which every font has.
 const Mark = "ⓘ"
 
-// Button is a thing to press: a label in a thin box.
+// Button is a thing to press: a label on a band of colour.
 //
-// Three lines, always, so a row of buttons has one line its labels all sit on.
-// A button that shrank to one line when it had no border would put its label
-// somewhere different from its neighbour's.
+// One line, and no border. A border costs two columns and two lines to say
+// something the fill already says, and on a card with two rows of actions that
+// is four lines of chrome around two lines of label. The band carries the state
+// as well as the shape: how much of its tone it shows is how live it is.
 type Button struct {
 	Label string
 	Tone  Tone
@@ -93,37 +94,48 @@ type Button struct {
 	Width int
 }
 
-// Wide is how many cells a button takes.
+// The levels a button is drawn at: how much of its tone each state shows.
+//
+// Three, not four. A panel whose keys are elsewhere is not a fourth state of
+// the button — it is every level taken down together, which [theme.Palette.AtRest]
+// already does to the hue before it gets here.
+const (
+	levelOff    = 0.2
+	levelNormal = 0.5
+	levelFocus  = 1.0
+)
+
+// Wide is how many cells a button takes: the label and a space either side.
 func (b Button) Wide() int {
 	if b.Width > 0 {
 		return b.Width
 	}
-	return lipgloss.Width(b.Label) + 4
+	return lipgloss.Width(b.Label) + 2
+}
+
+// level is how much of its tone this button shows.
+func (b Button) level(focused bool) float64 {
+	switch {
+	case b.Off:
+		return levelOff
+	case focused:
+		return levelFocus
+	}
+	return levelNormal
 }
 
 // Render draws the button, focused or not.
-func (b Button) Render(s theme.Styles, focused bool) []string {
-	inner := b.Wide() - 2
-	edge, text := s.Rule, b.Tone.style(s)
-	switch {
-	case b.Off:
-		edge, text = s.Rule, s.Desc
-	case focused:
-		// Filled rather than merely outlined: a border in the accent and a label
-		// in it is a button that looks selected, where a button that looks
-		// pressable is one the eye reads as the next thing to do.
-		fill := lipgloss.NewStyle().Foreground(b.Tone.colour(s.Palette)).Reverse(true)
-		return []string{
-			s.Selected.Render("╭" + strings.Repeat("─", inner) + "╮"),
-			s.Selected.Render("│") + fill.Render(centre(b.Label, inner)) + s.Selected.Render("│"),
-			s.Selected.Render("╰" + strings.Repeat("─", inner) + "╯"),
-		}
+//
+// The label colour is asked for rather than chosen here: which of the two ends
+// of the palette can be read on a fill flips partway up the ramp, and at a
+// different point for every tone.
+func (b Button) Render(s theme.Styles, focused bool) string {
+	fill := s.Palette.Fill(b.Tone.colour(s.Palette), b.level(focused))
+	st := lipgloss.NewStyle().Background(fill).Foreground(s.Palette.On(fill))
+	if focused {
+		st = st.Bold(true)
 	}
-	return []string{
-		edge.Render("╭" + strings.Repeat("─", inner) + "╮"),
-		edge.Render("│") + text.Render(centre(b.Label, inner)) + edge.Render("│"),
-		edge.Render("╰" + strings.Repeat("─", inner) + "╯"),
-	}
+	return st.Render(centre(b.Label, b.Wide()))
 }
 
 // Buttons draws several side by side, with one of them focused. A focus outside
@@ -133,26 +145,18 @@ func (b Button) Render(s theme.Styles, focused bool) []string {
 // proportion to what each button asked for, so a row of controls reaches both
 // edges of its card and the important one stays the widest. Given none, each is
 // as wide as its label.
-func Buttons(s theme.Styles, row []Button, focus, width int) []string {
+func Buttons(s theme.Styles, row []Button, focus, width int) string {
 	const gap = 1
 	if len(row) == 0 {
-		return []string{"", "", ""}
+		return ""
 	}
 	row = Stretch(row, width, gap)
 
-	drawn := make([][]string, len(row))
+	parts := make([]string, len(row))
 	for i, b := range row {
-		drawn[i] = b.Render(s, i == focus)
+		parts[i] = b.Render(s, i == focus)
 	}
-	out := make([]string, 3)
-	for line := range out {
-		var parts []string
-		for _, b := range drawn {
-			parts = append(parts, b[line])
-		}
-		out[line] = strings.Join(parts, strings.Repeat(" ", gap))
-	}
-	return out
+	return strings.Join(parts, strings.Repeat(" ", gap))
 }
 
 // Stretch is the widths a row of buttons will be drawn at, given the room.

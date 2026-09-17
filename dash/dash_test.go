@@ -35,7 +35,7 @@ func plain(s string) string {
 
 // A button is three lines whatever it says, so a row of them has one line its
 // labels all sit on.
-func TestAButtonIsAlwaysThreeLinesAndAsWideAsItSaid(t *testing.T) {
+func TestAButtonIsOneLineAndAsWideAsItSaid(t *testing.T) {
 	s := theme.Default()
 	for _, b := range []Button{
 		{Label: "pause"},
@@ -45,37 +45,34 @@ func TestAButtonIsAlwaysThreeLinesAndAsWideAsItSaid(t *testing.T) {
 		{Label: "wide one", Width: 30},
 	} {
 		for _, focused := range []bool{false, true} {
-			lines := b.Render(s, focused)
-			if len(lines) != 3 {
-				t.Errorf("%q drew %d lines, want 3", b.Label, len(lines))
+			line := b.Render(s, focused)
+			if strings.Contains(line, "\n") {
+				t.Errorf("%q drew more than one line: %q", b.Label, plain(line))
 			}
-			for _, l := range lines {
-				if got := lipgloss.Width(l); got != b.Wide() {
-					t.Errorf("%q line is %d wide, Wide() says %d: %q",
-						b.Label, got, b.Wide(), plain(l))
-				}
+			if got := lipgloss.Width(line); got != b.Wide() {
+				t.Errorf("%q is %d wide, Wide() says %d: %q",
+					b.Label, got, b.Wide(), plain(line))
 			}
-			if !strings.Contains(plain(lines[1]), b.Label) {
-				t.Errorf("%q does not carry its label: %q", b.Label, plain(lines[1]))
+			if !strings.Contains(plain(line), b.Label) {
+				t.Errorf("%q does not carry its label: %q", b.Label, plain(line))
 			}
 		}
 	}
 }
 
-// A row of buttons keeps every button's box intact, whichever one has the keys.
+// A row of buttons keeps its width whichever one has the keys: a focused button
+// that grew would move every button after it out from under the pointer.
 func TestARowOfButtonsLinesUp(t *testing.T) {
 	s := theme.Default()
 	row := []Button{{Label: "▸ start"}, {Label: "repair"}, {Label: Mark}}
 	for focus := -1; focus < len(row); focus++ {
-		lines := Buttons(s, row, focus, 0)
-		if len(lines) != 3 {
-			t.Fatalf("a row of buttons drew %d lines", len(lines))
+		line := Buttons(s, row, focus, 0)
+		natural := len(row) - 1
+		for _, b := range row {
+			natural += b.Wide()
 		}
-		want := lipgloss.Width(lines[0])
-		for _, l := range lines {
-			if got := lipgloss.Width(l); got != want {
-				t.Errorf("focus %d: line is %d wide, the first was %d", focus, got, want)
-			}
+		if got := lipgloss.Width(line); got != natural {
+			t.Errorf("focus %d: the row is %d wide, its buttons want %d", focus, got, natural)
 		}
 	}
 }
@@ -262,21 +259,90 @@ func TestAClickFindsThePopupButtonItWasDrawnOn(t *testing.T) {
 	screen := make([]string, 24)
 	_, spot := Over(screen, box, 80, 24)
 
-	// The middle of each button, on the line its label sits on.
-	x := spot.X + 2
-	for want, b := range p.Buttons {
-		rows := len(box)
-		y := spot.Y + rows - 2 - 2 - 3 + 1 // label line of the button row
-		got, ok := spot.ButtonAt(p, s, x+b.Wide()/2, y)
-		if !ok || got != want {
-			t.Errorf("a click on %q found button %d (ok=%v), want %d", b.Label, got, ok, want)
+	// Found where the buttons are actually drawn rather than recomputed: a
+	// click test that works the layout out a second time agrees with itself
+	// and not with the screen.
+	at := -1
+	for i, l := range box {
+		if strings.Contains(plain(l), p.Buttons[0].Label) {
+			at = i
+			break
 		}
-		x += b.Wide() + 1
+	}
+	if at < 0 {
+		t.Fatalf("no line of the popup carries %q", p.Buttons[0].Label)
+	}
+	drawn := []rune(plain(box[at]))
+	for want, b := range p.Buttons {
+		col := runeIndex(drawn, b.Label)
+		if col < 0 {
+			t.Fatalf("%q is not on the button line: %q", b.Label, string(drawn))
+		}
+		// The middle of the label, which is inside the button whatever the
+		// padding around it.
+		x := spot.X + col + lipgloss.Width(b.Label)/2
+		got, ok := spot.ButtonAt(p, s, x, spot.Y+at)
+		if !ok || got != want {
+			t.Errorf("a click on %q at column %d found button %d (ok=%v), want %d",
+				b.Label, col, got, ok, want)
+		}
 	}
 	// And a click on the body is not a click on a button.
 	if _, ok := spot.ButtonAt(p, s, spot.X+3, spot.Y+2); ok {
 		t.Error("a click on the popup's text pressed a button")
 	}
+}
+
+// And again with a row narrower than the box, so the centring offset is real.
+// The first popup's buttons happen to fill their box, which means a click test
+// using only that one passes with the offset removed entirely.
+func TestAClickFindsAButtonInACentredRow(t *testing.T) {
+	s := theme.Default()
+	p := Popup{
+		Title:   "a title long enough to set the width of this box",
+		Body:    []string{"a body line that is longer still, so the row cannot fill it"},
+		Buttons: []Button{{Label: "ok"}, {Label: "no"}},
+	}
+	if off := p.buttonsLeft(s); off <= 0 {
+		t.Fatalf("this popup does not centre its row (offset %d); the test proves nothing", off)
+	}
+
+	box := p.Render(s, p.Wide())
+	screen := make([]string, 24)
+	_, spot := Over(screen, box, 120, 24)
+
+	at := -1
+	for i, l := range box {
+		if strings.Contains(plain(l), p.Buttons[0].Label) {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		t.Fatalf("no line carries %q", p.Buttons[0].Label)
+	}
+	drawn := []rune(plain(box[at]))
+	for want, b := range p.Buttons {
+		col := runeIndex(drawn, b.Label)
+		x := spot.X + col + lipgloss.Width(b.Label)/2
+		got, ok := spot.ButtonAt(p, s, x, spot.Y+at)
+		if !ok || got != want {
+			t.Errorf("a click on %q at column %d found button %d (ok=%v), want %d",
+				b.Label, col, got, ok, want)
+		}
+	}
+}
+
+// runeIndex is strings.Index in cells rather than bytes, so a box-drawing
+// character does not put a column three adrift.
+func runeIndex(line []rune, want string) int {
+	w := []rune(want)
+	for i := 0; i+len(w) <= len(line); i++ {
+		if string(line[i:i+len(w)]) == string(w) {
+			return i
+		}
+	}
+	return -1
 }
 
 // Given a width, a row of buttons fills it exactly: a row that stops short of
@@ -293,12 +359,10 @@ func TestButtonsStretchToFillTheirRow(t *testing.T) {
 			natural += b.Wide()
 		}
 		for _, width := range []int{natural, natural + 1, 44, 60, 100} {
-			lines := Buttons(s, row, 0, width)
-			for _, l := range lines {
-				if got := lipgloss.Width(l); got != width {
-					t.Errorf("%d buttons in %d cells drew %d: %q",
-						len(row), width, got, plain(l))
-				}
+			line := Buttons(s, row, 0, width)
+			if got := lipgloss.Width(line); got != width {
+				t.Errorf("%d buttons in %d cells drew %d: %q",
+					len(row), width, got, plain(line))
 			}
 		}
 	}
