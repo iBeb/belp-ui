@@ -24,7 +24,9 @@ const (
 
 	// Window chrome: the way out of one, and the way into what it does not
 	// have room for.
-	Close = "\uf467" // oct-x
+	// Not the octicon x, which is drawn at a third of the cell: this one fills
+	// it, so the way out of a window is as plain as the title beside it.
+	Close = "\uf057" // fa-times-circle
 	Info  = "\uf449" // oct-info
 )
 
