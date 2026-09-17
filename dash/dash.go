@@ -25,15 +25,15 @@ import (
 type Tone int
 
 const (
-	// Plain is an ordinary control.
-	Plain Tone = iota
-	// Good is the safe setting of a choice: the one you would rather find
+	// Primary is an ordinary control.
+	Primary Tone = iota
+	// Success is the safe setting of a choice: the one you would rather find
 	// selected when you come back to it.
-	Good
-	// Care is one whose effect reaches past this machine, or costs real time.
-	Care
-	// Grave is destructive.
-	Grave
+	Success
+	// Warning is one whose effect reaches past this machine, or costs real time.
+	Warning
+	// Danger is destructive.
+	Danger
 	// Again ends a thing and begins it again. None of the three above: not the
 	// safe one, not a warning, and not destructive, but not nothing either.
 	Again
@@ -41,11 +41,11 @@ const (
 
 func (t Tone) style(s theme.Styles) lipgloss.Style {
 	switch t {
-	case Good:
+	case Success:
 		return s.Success
-	case Care:
+	case Warning:
 		return s.Warn
-	case Grave:
+	case Danger:
 		return s.Danger
 	case Again:
 		return s.Cycle
@@ -56,11 +56,11 @@ func (t Tone) style(s theme.Styles) lipgloss.Style {
 
 func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	switch t {
-	case Good:
+	case Success:
 		return p.Success
-	case Care:
+	case Warning:
 		return p.Warn
-	case Grave:
+	case Danger:
 		return p.Danger
 	case Again:
 		return p.Cycle
@@ -69,13 +69,13 @@ func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	}
 }
 
-// Info is the mark that opens the detail.
+// Mark is the sign that opens the detail.
 //
 // U+24D8 rather than ℹ or a Nerd Font glyph: the first carries an emoji
 // presentation in most fonts and so takes two cells in some terminals and one in
 // others, and the second is tofu anywhere the patched font is not installed.
 // This one is an ordinary letterform in a circle, which every font has.
-const Info = "ⓘ"
+const Mark = "ⓘ"
 
 // Button is a thing to press: a label in a thin box.
 //
@@ -415,7 +415,7 @@ func (g Gauge) colours(s theme.Styles) (filled, track lipgloss.Style) {
 	p := s.Palette
 	bar := p.Spent
 	switch {
-	case g.Tone != Plain:
+	case g.Tone != Primary:
 		bar = g.Tone.colour(p)
 	case g.Total > 0 && g.Done >= g.Total:
 		bar = p.Success
@@ -424,7 +424,7 @@ func (g Gauge) colours(s theme.Styles) (filled, track lipgloss.Style) {
 	}
 	filled = lipgloss.NewStyle().Background(bar).Foreground(p.Ground)
 	track = lipgloss.NewStyle().Background(p.Faint).Foreground(p.Text)
-	if g.Tone == Grave {
+	if g.Tone == Danger {
 		// Nothing to fill and something to say: the whole bar takes the colour,
 		// so an unreadable count does not look like a count of nothing.
 		track = lipgloss.NewStyle().Background(bar).Foreground(p.Ground)

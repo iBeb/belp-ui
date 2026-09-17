@@ -40,7 +40,7 @@ func TestAButtonIsAlwaysThreeLinesAndAsWideAsItSaid(t *testing.T) {
 	for _, b := range []Button{
 		{Label: "pause"},
 		{Label: "▸ start"},
-		{Label: "repair", Tone: Care},
+		{Label: "repair", Tone: Warning},
 		{Label: "x", Off: true},
 		{Label: "wide one", Width: 30},
 	} {
@@ -65,7 +65,7 @@ func TestAButtonIsAlwaysThreeLinesAndAsWideAsItSaid(t *testing.T) {
 // A row of buttons keeps every button's box intact, whichever one has the keys.
 func TestARowOfButtonsLinesUp(t *testing.T) {
 	s := theme.Default()
-	row := []Button{{Label: "▸ start"}, {Label: "repair"}, {Label: Info}}
+	row := []Button{{Label: "▸ start"}, {Label: "repair"}, {Label: Mark}}
 	for focus := -1; focus < len(row); focus++ {
 		lines := Buttons(s, row, focus, 0)
 		if len(lines) != 3 {
@@ -199,7 +199,7 @@ func TestTheGaugePaintsItsTrackAsWellAsItsFill(t *testing.T) {
 	}
 	// An unreadable count takes the colour across the whole bar, so it does not
 	// look like a count of nothing.
-	grave := Gauge{Total: 0, Label: "unknown", Tone: Grave}.Render(s, 10)
+	grave := Gauge{Total: 0, Label: "unknown", Tone: Danger}.Render(s, 10)
 	if strings.Contains(grave, background(s.Palette.Faint.Dark)) {
 		t.Errorf("an unreadable bar draws an ordinary track: %q", grave)
 	}
@@ -284,8 +284,8 @@ func TestAClickFindsThePopupButtonItWasDrawnOn(t *testing.T) {
 func TestButtonsStretchToFillTheirRow(t *testing.T) {
 	s := theme.Default()
 	for _, row := range [][]Button{
-		{{Label: "▮▮ pause"}, {Label: "⚒ repair"}, {Label: Info}},
-		{{Label: "▮▮ stop"}, {Label: Info}},
+		{{Label: "▮▮ pause"}, {Label: "⚒ repair"}, {Label: Mark}},
+		{{Label: "▮▮ stop"}, {Label: Mark}},
 		{{Label: "only one"}},
 	} {
 		natural := len(row) - 1
@@ -309,7 +309,7 @@ func TestButtonsStretchToFillTheirRow(t *testing.T) {
 // row that has lost its emphasis.
 func TestTheStretchKeepsTheProportions(t *testing.T) {
 	s := theme.Default()
-	row := []Button{{Label: "▮▮ pause"}, {Label: Info}}
+	row := []Button{{Label: "▮▮ pause"}, {Label: Mark}}
 	wide := Stretch(row, 60, 1)
 	if wide[0].Width <= wide[1].Width {
 		t.Errorf("the main button is %d wide and the mark %d", wide[0].Width, wide[1].Width)
@@ -414,7 +414,7 @@ func TestAPopupKeepsItsFrameWhateverIsPutInIt(t *testing.T) {
 // ordinary state, where two radios filled is a choice that has gone wrong.
 func TestAToggleSaysWhetherItIsOnWithoutExcludingAnything(t *testing.T) {
 	s := theme.Default()
-	on := Toggle{Label: "clickhouse", On: true, Tone: Good}
+	on := Toggle{Label: "clickhouse", On: true, Tone: Success}
 	off := Toggle{Label: "clickhouse"}
 
 	for _, c := range []struct {
@@ -449,7 +449,7 @@ func TestAPopupListsRowsWithTheirOwnSwitches(t *testing.T) {
 	s := theme.Default()
 	p := Popup{Title: "web", Body: []string{"branch CCC-4456"},
 		Rows: []Row{
-			{Toggle: Toggle{Label: "db", On: true, Tone: Good}, Say: "running"},
+			{Toggle: Toggle{Label: "db", On: true, Tone: Success}, Say: "running"},
 			{Toggle: Toggle{Label: "clickhouse"}, Say: "exited", Note: "optional"},
 		},
 		Buttons: []Button{{Label: "close"}}}
@@ -558,10 +558,10 @@ func TestAMarkIsDrawnLikeTheWordItBelongsTo(t *testing.T) {
 		{"an unchosen radio", Radio{Options: []string{"read only", "read · write"},
 			Active: 1}.Render(s, false), radioOff},
 		{"a chosen radio", Radio{Options: []string{"read only"}, Active: 0,
-			Tone: Good}.Render(s, false), radioOn},
+			Tone: Success}.Render(s, false), radioOn},
 		{"a toggle that is off", Toggle{Label: "clickhouse"}.Render(s, false), toggleOff},
 		{"a toggle that is on", Toggle{Label: "clickhouse", On: true,
-			Tone: Good}.Render(s, false), toggleOn},
+			Tone: Success}.Render(s, false), toggleOn},
 	} {
 		at := strings.Index(c.line, c.mark)
 		if at < 0 {
@@ -582,7 +582,7 @@ func TestAMarkIsDrawnLikeTheWordItBelongsTo(t *testing.T) {
 func TestEveryToneIsItsOwnColour(t *testing.T) {
 	p := theme.DefaultPalette()
 	seen := map[string]Tone{}
-	for _, tone := range []Tone{Plain, Good, Care, Grave, Again} {
+	for _, tone := range []Tone{Primary, Success, Warning, Danger, Again} {
 		got := tone.colour(p)
 		if first, ok := seen[got.Dark]; ok {
 			t.Errorf("tone %d and tone %d are both %q", first, tone, got.Dark)
