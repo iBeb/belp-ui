@@ -672,8 +672,10 @@ func TestAPopupWithNoTitleHasAnUnbrokenTopEdge(t *testing.T) {
 		t.Errorf("the top edge has a gap in it: %q", top)
 	}
 	// And a title still gets its room, after the mark.
+	// A length of border between the mark and the words, so the mark is not
+	// read as a bullet belonging to them.
 	titled := plain(Popup{Title: "repair web"}.Render(s, 40)[0])
-	if !strings.HasPrefix(titled, "╭"+Shut+" repair web ─") {
+	if !strings.HasPrefix(titled, "╭"+Shut+"─ repair web ─") {
 		t.Errorf("a titled edge reads %q", titled)
 	}
 	// A window that cannot be closed does not offer a way out.
