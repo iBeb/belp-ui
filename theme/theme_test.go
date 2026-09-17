@@ -283,3 +283,59 @@ func travel(from, to string, dark bool) float64 {
 	}
 	return sum / float64(n)
 }
+
+// A fill runs from the background to the hue itself.
+func TestFillWalksFromTheGroundToTheHue(t *testing.T) {
+	p := DefaultPalette()
+	if got := p.Fill(p.Danger, 0); got != p.Ground {
+		t.Errorf("Fill at 0 is %v, want the ground %v", got, p.Ground)
+	}
+	if got := p.Fill(p.Danger, 1); got != p.Danger {
+		t.Errorf("Fill at 1 is %v, want the hue %v", got, p.Danger)
+	}
+	// And it climbs: every step is lighter than the one below it on a dark
+	// terminal, which is what makes a ramp read as a ramp.
+	last := -1.0
+	for i := 0; i <= 10; i++ {
+		l := luminance(p.Fill(p.Danger, float64(i)/10).Dark)
+		if l < last {
+			t.Errorf("level %d is darker than the one below it", i)
+		}
+		last = l
+	}
+}
+
+// Every label the palette picks has to be readable on the fill it sits on.
+//
+// This is the property the whole ramp rests on, and the one a new tone breaks
+// silently: a hue added to the palette that happens to land mid-grey is too
+// dark for the ground and too light for the text, and the button looks fine to
+// whoever added it and unreadable on somebody else's terminal.
+func TestALabelIsReadableOnEveryFill(t *testing.T) {
+	const floor = 4.5 // WCAG AA for text of an ordinary size
+
+	p := DefaultPalette()
+	for _, tone := range []struct {
+		name string
+		c    AdaptiveColor
+	}{
+		{"Primary", p.Primary}, {"Secondary", p.Secondary}, {"Accent", p.Accent},
+		{"Success", p.Success}, {"Warn", p.Warn}, {"Danger", p.Danger},
+	} {
+		// The levels a control is actually drawn at, and the same again for a
+		// panel at rest.
+		for _, level := range []float64{0.2, 0.5, 1, 0.2 * Rest, 0.5 * Rest, Rest} {
+			fill := p.Fill(tone.c, level)
+			on := p.On(fill)
+			for _, v := range []struct{ what, fg, bg string }{
+				{"light", on.Light, fill.Light},
+				{"dark", on.Dark, fill.Dark},
+			} {
+				if got := contrast(v.bg, v.fg); got < floor {
+					t.Errorf("%s at %.2f on a %s terminal: %s on %s is %.2f:1, want %.1f",
+						tone.name, level, v.what, v.fg, v.bg, got, floor)
+				}
+			}
+		}
+	}
+}

@@ -8,6 +8,7 @@ package theme
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,7 +26,19 @@ type Palette struct {
 	// value, the key beside a fact. A step below Dim, because a column of labels
 	// is read once and then skipped over, and one drawn at the weight of the
 	// values makes a block of facts read as twice as much text as it is.
-	Quiet  lipgloss.AdaptiveColor
+	Quiet lipgloss.AdaptiveColor
+	// Primary and Secondary are the two neutral tones a control takes: the
+	// ordinary button, and the one beside it that wants telling apart. Neutral
+	// rather than coloured, so the coloured tones keep meaning something.
+	//
+	// Secondary is cooler rather than merely darker. A neutral has nothing but
+	// lightness to vary, and lightness is what says how live a control is, so
+	// two greys end up arguing with the state they are drawn in; a difference
+	// in temperature survives being dimmed, where a difference in weight does
+	// not.
+	Primary   lipgloss.AdaptiveColor
+	Secondary lipgloss.AdaptiveColor
+
 	Accent lipgloss.AdaptiveColor // the selected or focused thing
 	Key    lipgloss.AdaptiveColor // key names in a status bar
 
@@ -79,23 +92,25 @@ type Palette struct {
 // the thing you are about to act on and on warning you off the rest.
 func DefaultPalette() Palette {
 	return Palette{
-		Text:    lipgloss.AdaptiveColor{Light: "#1c1c1c", Dark: "#ffffff"},
-		Dim:     lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#dcdcdc"},
-		Faint:   lipgloss.AdaptiveColor{Light: "#c6c6c6", Dark: "#3a3a3a"},
-		Quiet:   lipgloss.AdaptiveColor{Light: "#8a8a8a", Dark: "#7d7d7d"},
-		Accent:  lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
-		Resting: lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
-		Key:     lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
-		Ground:  lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#16161e"},
-		Success: lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
-		Warn:    lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
-		Danger:  lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
-		Cycle:   lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
-		Begun:   lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
-		Flight:  lipgloss.AdaptiveColor{Light: "#0f766e", Dark: "#73daca"},
-		Spent:   lipgloss.AdaptiveColor{Light: "#767676", Dark: "#8a92b2"},
-		Voice:   lipgloss.AdaptiveColor{Light: "#9d174d", Dark: "#ff9ac1"},
-		Judge:   lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
+		Text:      lipgloss.AdaptiveColor{Light: "#1c1c1c", Dark: "#ffffff"},
+		Dim:       lipgloss.AdaptiveColor{Light: "#6c6c6c", Dark: "#dcdcdc"},
+		Faint:     lipgloss.AdaptiveColor{Light: "#c6c6c6", Dark: "#3a3a3a"},
+		Quiet:     lipgloss.AdaptiveColor{Light: "#8a8a8a", Dark: "#7d7d7d"},
+		Primary:   lipgloss.AdaptiveColor{Light: "#4a4a4a", Dark: "#c8c8c8"},
+		Secondary: lipgloss.AdaptiveColor{Light: "#5a6b7d", Dark: "#8fa3b8"},
+		Accent:    lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
+		Resting:   lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
+		Key:       lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
+		Ground:    lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#16161e"},
+		Success:   lipgloss.AdaptiveColor{Light: "#006600", Dark: "#9ece6a"},
+		Warn:      lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
+		Danger:    lipgloss.AdaptiveColor{Light: "#a00000", Dark: "#f7768e"},
+		Cycle:     lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
+		Begun:     lipgloss.AdaptiveColor{Light: "#8f6a00", Dark: "#e0af68"},
+		Flight:    lipgloss.AdaptiveColor{Light: "#0f766e", Dark: "#73daca"},
+		Spent:     lipgloss.AdaptiveColor{Light: "#767676", Dark: "#8a92b2"},
+		Voice:     lipgloss.AdaptiveColor{Light: "#9d174d", Dark: "#ff9ac1"},
+		Judge:     lipgloss.AdaptiveColor{Light: "#6b21a8", Dark: "#bb9af7"},
 	}
 }
 
@@ -236,13 +251,85 @@ const Rest = 0.3
 func (p Palette) AtRest() Palette {
 	q := p
 	for _, c := range []*AdaptiveColor{
-		&q.Text, &q.Dim, &q.Faint, &q.Quiet, &q.Accent, &q.Key, &q.Resting,
+		&q.Text, &q.Dim, &q.Faint, &q.Quiet, &q.Primary, &q.Secondary,
+		&q.Accent, &q.Key, &q.Resting,
 		&q.Success, &q.Warn, &q.Danger, &q.Cycle,
 		&q.Begun, &q.Flight, &q.Spent, &q.Voice, &q.Judge,
 	} {
 		*c = fade(*c, p.Ground, Rest)
 	}
 	return q
+}
+
+// Fill is a colour shown at part of its strength: the hue blended that far from
+// the background toward itself, at Level 0 the background and at 1 the hue.
+//
+// This is how a control says how live it is. A terminal has no alpha — there is
+// no such escape as "red at a fifth" — but the background is known, so the same
+// picture can be computed and sent as one solid colour. What a browser would do
+// with opacity, this does with arithmetic.
+func (p Palette) Fill(c AdaptiveColor, level float64) AdaptiveColor {
+	// fade measures the distance travelled toward the ground; a level measures
+	// how much of the hue is left, which is the other end of the same journey.
+	return fade(c, p.Ground, 1-clampF(level, 0, 1))
+}
+
+// On is the colour to write on a fill: Ground or Text, whichever can actually
+// be read against it.
+//
+// Chosen by measuring rather than by a rule of thumb, and per variant, because
+// the answer flips partway up the ramp and flips at a different point for every
+// hue. A mid-tone fill is where a guess goes wrong: too dark for the ground and
+// too light for the text, and the label that looked fine on one tone is illegible
+// on the next.
+func (p Palette) On(fill AdaptiveColor) AdaptiveColor {
+	pick := func(bg, a, b string) string {
+		if contrast(bg, a) >= contrast(bg, b) {
+			return a
+		}
+		return b
+	}
+	return AdaptiveColor{
+		Light: pick(fill.Light, p.Ground.Light, p.Text.Light),
+		Dark:  pick(fill.Dark, p.Ground.Dark, p.Text.Dark),
+	}
+}
+
+// contrast is the WCAG ratio between two hexes, 1 for identical and 21 for
+// black against white.
+func contrast(a, b string) float64 {
+	la, lb := luminance(a), luminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
+// luminance is WCAG relative luminance. An unreadable colour comes back as 0,
+// which makes it the darkest thing there is rather than a panic.
+func luminance(hex string) float64 {
+	r, g, b, ok := split(hex)
+	if !ok {
+		return 0
+	}
+	lin := func(v int) float64 {
+		x := float64(v) / 255
+		if x <= 0.04045 {
+			return x / 12.92
+		}
+		return math.Pow((x+0.055)/1.055, 2.4)
+	}
+	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
+}
+
+func clampF(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 // AdaptiveColor is lipgloss's, named here so the list above reads as one thing.
