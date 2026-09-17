@@ -739,3 +739,27 @@ func TestAPopupTakesTheMarkTheAppGivesIt(t *testing.T) {
 		t.Error("the hit area is still the width of the default mark")
 	}
 }
+
+// A close mark does not need a label, it needs to be recognised — and the
+// colour every desktop has used for it since the traffic lights is the fastest
+// way to do that.
+func TestTheCloseMarkIsDrawnInTheColourOfClosing(t *testing.T) {
+	s := theme.Default()
+	top := Popup{Title: "web"}.Render(s, 40)[0]
+
+	at := strings.Index(top, Shut)
+	if at < 0 {
+		t.Fatal("no mark was drawn")
+	}
+	if !strings.Contains(top[:at], background(s.Palette.Danger.Dark)) &&
+		!strings.Contains(top[:at], foreground(s.Palette.Danger.Dark)) {
+		t.Errorf("the mark is not drawn in the danger colour: %q", top[:at])
+	}
+}
+
+// foreground is the escape lipgloss writes for a text colour.
+func foreground(hex string) string {
+	var r, g, b int
+	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return fmt.Sprintf("38;2;%d;%d;%d", r, g, b)
+}

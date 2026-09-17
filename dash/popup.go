@@ -35,9 +35,8 @@ type Popup struct {
 	// Fixed is a popup that cannot be closed, and so is drawn without the mark
 	// in its corner. The zero value is closable, because nearly everything is.
 	Fixed bool
-	// Shut overrides the mark in the corner. An app whose terminal has a patched
-	// font passes the glyph for it; the default works in any terminal at all,
-	// which is why it is not the glyph.
+	// Shut overrides the mark in the corner. The default reads in any terminal;
+	// an app that knows its own font may pass something rounder.
 	Shut string
 }
 
@@ -100,10 +99,12 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	// Spaces either side of nothing is a two-cell gap at the top left, which
 	// reads as a dent in the border rather than as room for a word.
 	// The corner, then the way out, then the border carries on with the title.
-	// A window you can close says so where a pointer already goes to look.
+	// A window you can close says so where a pointer already goes to look, and
+	// in the colour every desktop has used for it since the traffic lights: a
+	// close mark does not need a label, it needs to be recognised.
 	shut := ""
 	if !p.Fixed {
-		shut = s.Desc.Render(p.shut())
+		shut = s.Danger.Render(p.shut())
 	}
 	head := ""
 	if p.Title != "" {
