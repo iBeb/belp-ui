@@ -713,3 +713,28 @@ func TestAClickOnTheCornerFindsTheWayOut(t *testing.T) {
 		t.Error("a fixed window closed on a click")
 	}
 }
+
+// An app whose terminal has a patched font can pass its own mark, and the
+// window has to size and hit-test against that one rather than the default.
+func TestAPopupTakesTheMarkTheAppGivesIt(t *testing.T) {
+	s := theme.Default()
+	p := Popup{Title: "web", Shut: ""} // one cell, where the default is three
+
+	top := plain(p.Render(s, p.Wide())[0])
+	if strings.Contains(top, Shut) {
+		t.Errorf("it drew the default mark: %q", top)
+	}
+	if !strings.Contains(top, p.Shut) {
+		t.Errorf("it did not draw the app's mark: %q", top)
+	}
+
+	screen := make([]string, 12)
+	_, at := Over(screen, p.Render(s, p.Wide()), 60, 12)
+	if !at.ShutAt(p, at.X+1, at.Y) {
+		t.Error("a click on the mark missed it")
+	}
+	// One cell wide, so the cell after it is the border and not the mark.
+	if at.ShutAt(p, at.X+2, at.Y) {
+		t.Error("the hit area is still the width of the default mark")
+	}
+}

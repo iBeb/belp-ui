@@ -21,6 +21,11 @@ const (
 	PullRequestClosed = "\uf4dc" // oct-git_pull_request_closed
 	Eye               = "\uf441" // oct-eye
 	Comment           = "\uf41f" // oct-comment
+
+	// Window chrome: the way out of one, and the way into what it does not
+	// have room for.
+	Close = "\uf467" // oct-x
+	Info  = "\uf449" // oct-info
 )
 
 // All is every glyph with its name, for a preview to draw and a test to check.
@@ -37,4 +42,6 @@ var All = []struct {
 	{PullRequestClosed, "pull request closed"},
 	{Eye, "eye"},
 	{Comment, "comment"},
+	{Close, "close"},
+	{Info, "info"},
 }

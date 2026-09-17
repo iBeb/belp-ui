@@ -35,6 +35,10 @@ type Popup struct {
 	// Fixed is a popup that cannot be closed, and so is drawn without the mark
 	// in its corner. The zero value is closable, because nearly everything is.
 	Fixed bool
+	// Shut overrides the mark in the corner. An app whose terminal has a patched
+	// font passes the glyph for it; the default works in any terminal at all,
+	// which is why it is not the glyph.
+	Shut string
 }
 
 // Shut is the mark in the top-left corner: the thing a pointer goes to when a
@@ -66,7 +70,7 @@ func (p Popup) Wide() int {
 	// whose title no longer fits on it.
 	want := lipgloss.Width(p.Title) + 4
 	if !p.Fixed {
-		want += lipgloss.Width(Shut)
+		want += lipgloss.Width(p.shut())
 	}
 	for _, line := range p.Body {
 		want = max(want, lipgloss.Width(line)+4)
@@ -99,7 +103,7 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	// A window you can close says so where a pointer already goes to look.
 	shut := ""
 	if !p.Fixed {
-		shut = s.Desc.Render(Shut)
+		shut = s.Desc.Render(p.shut())
 	}
 	head := ""
 	if p.Title != "" {
@@ -314,5 +318,13 @@ func (s Spot) ShutAt(p Popup, x, y int) bool {
 	if p.Fixed || s.H == 0 {
 		return false
 	}
-	return y == s.Y && x >= s.X+1 && x < s.X+1+lipgloss.Width(Shut)
+	return y == s.Y && x >= s.X+1 && x < s.X+1+lipgloss.Width(p.shut())
+}
+
+// shut is the mark this popup draws in its corner.
+func (p Popup) shut() string {
+	if p.Shut != "" {
+		return p.Shut
+	}
+	return Shut
 }
