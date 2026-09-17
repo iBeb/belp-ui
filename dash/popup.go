@@ -77,7 +77,13 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	}
 	edge := s.Selected
 
-	head := " " + s.Heading.Render(p.Title) + " "
+	// A title is padded away from the corners; no title leaves the edge unbroken.
+	// Spaces either side of nothing is a two-cell gap at the top left, which
+	// reads as a dent in the border rather than as room for a word.
+	head := ""
+	if p.Title != "" {
+		head = " " + s.Heading.Render(p.Title) + " "
+	}
 	rule := inner - lipgloss.Width(head)
 	if rule < 0 {
 		head, rule = " ", inner-1

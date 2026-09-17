@@ -654,3 +654,24 @@ func TestEveryToneIsItsOwnColour(t *testing.T) {
 		seen[got.Dark] = tone
 	}
 }
+
+// A title is padded away from the corners. No title has to leave the edge
+// unbroken: spaces either side of nothing is a two-cell gap at the top left,
+// which reads as a dent in the border rather than as room for a word.
+func TestAPopupWithNoTitleHasAnUnbrokenTopEdge(t *testing.T) {
+	s := theme.Default()
+	box := Popup{Body: []string{"something happened"}}.Render(s, 40)
+	top := plain(box[0])
+
+	if !strings.HasPrefix(top, "╭──") {
+		t.Errorf("the top edge starts %q", top)
+	}
+	if strings.Contains(top, " ") {
+		t.Errorf("the top edge has a gap in it: %q", top)
+	}
+	// And a title still gets its room.
+	titled := plain(Popup{Title: "repair web"}.Render(s, 40)[0])
+	if !strings.HasPrefix(titled, "╭ repair web ─") {
+		t.Errorf("a titled edge reads %q", titled)
+	}
+}
