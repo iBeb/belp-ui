@@ -22,6 +22,10 @@ const (
 	Eye               = "\uf441" // oct-eye
 	Comment           = "\uf41f" // oct-comment
 
+	// Where a row hands off to: a browser, or a terminal with a session in it.
+	Link     = "\uf465" // oct-link_external
+	Terminal = "\uf489" // oct-terminal
+
 	// Window chrome: the way out of one, and the way into what it does not
 	// have room for.
 	// Not the octicon x, which is drawn at a third of the cell: this one fills
@@ -44,6 +48,8 @@ var All = []struct {
 	{PullRequestClosed, "pull request closed"},
 	{Eye, "eye"},
 	{Comment, "comment"},
+	{Link, "link"},
+	{Terminal, "terminal"},
 	{Close, "close"},
 	{Info, "info"},
 }
