@@ -20,13 +20,24 @@ import (
 )
 
 // Tone is what a control means, which is the only thing that changes its
-// colour. Kept to three, because a palette of button colours is a decoration
-// budget rather than a vocabulary.
+// colour.
+//
+// Named after the set every CSS framework settled on, because those are the
+// names a reader arrives already knowing: Danger is understood by anyone who
+// has built a web page, where Grave had to be learned. The two neutrals carry
+// the controls that mean nothing in particular, which is most of them, and so
+// leave the coloured tones meaning something.
 type Tone int
 
 const (
-	// Primary is an ordinary control.
+	// Primary is the ordinary control, and the zero value: a button with no
+	// tone set is the usual kind of button.
 	Primary Tone = iota
+	// Secondary is also neutral, for telling one group of controls from
+	// another where neither of them means anything stronger.
+	Secondary
+	// Info opens a detail — the control behind [Mark].
+	Info
 	// Success is the safe setting of a choice: the one you would rather find
 	// selected when you come back to it.
 	Success
@@ -41,6 +52,10 @@ const (
 
 func (t Tone) style(s theme.Styles) lipgloss.Style {
 	switch t {
+	case Secondary:
+		return s.Desc
+	case Info:
+		return s.Selected
 	case Success:
 		return s.Success
 	case Warning:
@@ -54,8 +69,14 @@ func (t Tone) style(s theme.Styles) lipgloss.Style {
 	}
 }
 
+// colour is the hue a tone is drawn in, and every fill of it is a level of
+// this one colour.
 func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	switch t {
+	case Secondary:
+		return p.Secondary
+	case Info:
+		return p.Accent
 	case Success:
 		return p.Success
 	case Warning:
@@ -65,7 +86,7 @@ func (t Tone) colour(p theme.Palette) lipgloss.AdaptiveColor {
 	case Again:
 		return p.Cycle
 	default:
-		return p.Accent
+		return p.Primary
 	}
 }
 
