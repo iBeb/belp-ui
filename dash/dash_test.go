@@ -663,15 +663,53 @@ func TestAPopupWithNoTitleHasAnUnbrokenTopEdge(t *testing.T) {
 	box := Popup{Body: []string{"something happened"}}.Render(s, 40)
 	top := plain(box[0])
 
-	if !strings.HasPrefix(top, "╭──") {
+	// The corner, the way out, then an unbroken rule: no title must not leave a
+	// two-cell gap where a word would have been.
+	if !strings.HasPrefix(top, "╭"+Shut+"──") {
 		t.Errorf("the top edge starts %q", top)
 	}
 	if strings.Contains(top, " ") {
 		t.Errorf("the top edge has a gap in it: %q", top)
 	}
-	// And a title still gets its room.
+	// And a title still gets its room, after the mark.
 	titled := plain(Popup{Title: "repair web"}.Render(s, 40)[0])
-	if !strings.HasPrefix(titled, "╭ repair web ─") {
+	if !strings.HasPrefix(titled, "╭"+Shut+" repair web ─") {
 		t.Errorf("a titled edge reads %q", titled)
+	}
+	// A window that cannot be closed does not offer a way out.
+	fixed := plain(Popup{Title: "working", Fixed: true}.Render(s, 40)[0])
+	if strings.Contains(fixed, Shut) {
+		t.Errorf("a fixed window offers a close mark: %q", fixed)
+	}
+}
+
+// The way out is where a pointer already goes to look for it, and a click on
+// those three cells has to land on it.
+func TestAClickOnTheCornerFindsTheWayOut(t *testing.T) {
+	s := theme.Default()
+	p := Popup{Title: "web", Body: []string{"branch CCC-4456"}}
+	box := p.Render(s, p.Wide())
+	screen := make([]string, 20)
+	_, at := Over(screen, box, 60, 20)
+
+	for _, x := range []int{at.X + 1, at.X + 2, at.X + 3} {
+		if !at.ShutAt(p, x, at.Y) {
+			t.Errorf("a click at column %d of the top line missed the way out", x-at.X)
+		}
+	}
+	// The corner itself is the border, and the title is the title.
+	if at.ShutAt(p, at.X, at.Y) {
+		t.Error("the corner itself closed the window")
+	}
+	if at.ShutAt(p, at.X+6, at.Y) {
+		t.Error("a click on the title closed the window")
+	}
+	// And a line below the top is not the top.
+	if at.ShutAt(p, at.X+2, at.Y+1) {
+		t.Error("a click under the mark closed the window")
+	}
+	// A window that cannot be closed has nothing there to hit.
+	if (Spot{X: at.X, Y: at.Y, W: at.W, H: at.H}).ShutAt(Popup{Fixed: true}, at.X+2, at.Y) {
+		t.Error("a fixed window closed on a click")
 	}
 }

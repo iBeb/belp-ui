@@ -32,7 +32,17 @@ type Popup struct {
 	Focus int
 	// Note is one dim line under the buttons, for how to leave.
 	Note string
+	// Fixed is a popup that cannot be closed, and so is drawn without the mark
+	// in its corner. The zero value is closable, because nearly everything is.
+	Fixed bool
 }
+
+// Shut is the mark in the top-left corner: the thing a pointer goes to when a
+// window is in the way.
+//
+// Square brackets rather than a glyph — ✕ and ⊗ are emoji in half the fonts and
+// two cells wide in a border that has room for three.
+const Shut = "[x]"
 
 // Row is one line of a list with its own switch, and whatever is worth saying
 // about it to the right.
@@ -52,7 +62,12 @@ func (p Popup) Stops() int { return len(p.Rows) + len(p.Buttons) }
 
 // Wide is how much room the popup wants, given what is in it.
 func (p Popup) Wide() int {
+	// The mark takes room out of the top line, so a box sized without it is one
+	// whose title no longer fits on it.
 	want := lipgloss.Width(p.Title) + 4
+	if !p.Fixed {
+		want += lipgloss.Width(Shut)
+	}
 	for _, line := range p.Body {
 		want = max(want, lipgloss.Width(line)+4)
 	}
@@ -80,15 +95,22 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	// A title is padded away from the corners; no title leaves the edge unbroken.
 	// Spaces either side of nothing is a two-cell gap at the top left, which
 	// reads as a dent in the border rather than as room for a word.
+	// The corner, then the way out, then the border carries on with the title.
+	// A window you can close says so where a pointer already goes to look.
+	shut := ""
+	if !p.Fixed {
+		shut = s.Desc.Render(Shut)
+	}
 	head := ""
 	if p.Title != "" {
 		head = " " + s.Heading.Render(p.Title) + " "
 	}
-	rule := inner - lipgloss.Width(head)
+	rule := inner - lipgloss.Width(shut) - lipgloss.Width(head)
 	if rule < 0 {
-		head, rule = " ", inner-1
+		head, rule = " ", max(0, inner-lipgloss.Width(shut)-1)
 	}
-	out := []string{edge.Render("╭") + head + edge.Render(strings.Repeat("─", rule)+"╮")}
+	out := []string{edge.Render("╭") + shut + head +
+		edge.Render(strings.Repeat("─", rule)+"╮")}
 
 	// Cut as well as padded: a body line longer than the box runs straight
 	// through the right-hand border, and a popup that cannot hold its own frame
@@ -282,4 +304,15 @@ func (s Spot) RowAt(p Popup, x, y int) (int, bool) {
 		return 0, false
 	}
 	return i, true
+}
+
+// ShutAt reports whether a point is on the mark that closes the window.
+//
+// The top line, immediately after the corner: the same three cells the drawing
+// puts it in, so the pointer and the picture cannot disagree.
+func (s Spot) ShutAt(p Popup, x, y int) bool {
+	if p.Fixed || s.H == 0 {
+		return false
+	}
+	return y == s.Y && x >= s.X+1 && x < s.X+1+lipgloss.Width(Shut)
 }
