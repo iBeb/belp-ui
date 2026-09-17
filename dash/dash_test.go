@@ -303,7 +303,7 @@ func TestAClickFindsAButtonInACentredRow(t *testing.T) {
 		Body:    []string{"a body line that is longer still, so the row cannot fill it"},
 		Buttons: []Button{{Label: "ok"}, {Label: "no"}},
 	}
-	if off := p.buttonsLeft(s); off <= 0 {
+	if off := p.buttonsLeft(s, p.Wide()); off <= 0 {
 		t.Fatalf("this popup does not centre its row (offset %d); the test proves nothing", off)
 	}
 

@@ -176,12 +176,7 @@ func (s Spot) ButtonAt(p Popup, st theme.Styles, x, y int) (int, bool) {
 		return 0, false
 	}
 
-	inner := s.W - 2
-	wide := len(p.Buttons) - 1
-	for _, b := range p.Buttons {
-		wide += b.Wide()
-	}
-	at := x - (s.X + 2 + max(0, (inner-2-wide)/2))
+	at := x - (s.X + 2 + p.buttonsLeft(st, s.W))
 	for i, b := range p.Buttons {
 		if at < 0 {
 			return 0, false
@@ -200,9 +195,11 @@ func (s Spot) ButtonAt(p Popup, st theme.Styles, x, y int) (int, bool) {
 // of one place rather than worked out twice: a click that lands on the button
 // next to the one it was aimed at is what two copies of this arithmetic drifting
 // apart looks like.
-func (p Popup) buttonsLeft(st theme.Styles) int {
-	inner := p.Wide() - 2
-	room := inner - 2 - lipgloss.Width(Buttons(st, p.Buttons, -1, 0))
+//
+// The width is the one the box was drawn at, not the one it asked for. A popup
+// rendered narrower than Wide() still centres its row inside what it got.
+func (p Popup) buttonsLeft(st theme.Styles, width int) int {
+	room := width - 4 - lipgloss.Width(Buttons(st, p.Buttons, -1, 0))
 	if room <= 0 {
 		return 0
 	}
