@@ -318,7 +318,9 @@ func (s Spot) ShutAt(p Popup, x, y int) bool {
 	if p.Fixed || s.H == 0 {
 		return false
 	}
-	return y == s.Y && x >= s.X+1 && x < s.X+1+lipgloss.Width(p.shut())
+	// The corner counts as part of it. A glyph is one cell wide, which is a hard
+	// thing to hit with a pointer, and the corner beside it means nothing else.
+	return y == s.Y && x >= s.X && x < s.X+1+lipgloss.Width(p.shut())
 }
 
 // shut is the mark this popup draws in its corner.

@@ -697,9 +697,10 @@ func TestAClickOnTheCornerFindsTheWayOut(t *testing.T) {
 			t.Errorf("a click at column %d of the top line missed the way out", x-at.X)
 		}
 	}
-	// The corner itself is the border, and the title is the title.
-	if at.ShutAt(p, at.X, at.Y) {
-		t.Error("the corner itself closed the window")
+	// The corner counts too: one cell is a hard thing to hit, and the corner
+	// beside the mark means nothing else.
+	if !at.ShutAt(p, at.X, at.Y) {
+		t.Error("the corner did not close the window")
 	}
 	if at.ShutAt(p, at.X+6, at.Y) {
 		t.Error("a click on the title closed the window")
@@ -733,8 +734,8 @@ func TestAPopupTakesTheMarkTheAppGivesIt(t *testing.T) {
 	if !at.ShutAt(p, at.X+1, at.Y) {
 		t.Error("a click on the mark missed it")
 	}
-	// One cell wide, so the cell after it is the border and not the mark.
-	if at.ShutAt(p, at.X+2, at.Y) {
+	// One cell wide, plus the corner: the cell after that is the border.
+	if at.ShutAt(p, at.X+3, at.Y) {
 		t.Error("the hit area is still the width of the default mark")
 	}
 }
