@@ -35,7 +35,7 @@ func TestAllCoversEveryConstant(t *testing.T) {
 	want := []string{
 		Commit, Push, Branch, Trash,
 		PullRequest, Merge, PullRequestClosed, Eye, Comment,
-		Close, Info,
+		Link, Terminal, Close, Info,
 	}
 	if len(All) != len(want) {
 		t.Fatalf("All has %d entries, want %d", len(All), len(want))
