@@ -40,7 +40,12 @@ type Palette struct {
 	Secondary lipgloss.AdaptiveColor
 
 	Accent lipgloss.AdaptiveColor // the selected or focused thing
-	Key    lipgloss.AdaptiveColor // key names in a status bar
+	// Link is where a row hands off: a ticket in a tracker, a pull request on
+	// GitHub. A quieter blue than Accent on purpose — Accent means "the thing
+	// you are about to act on", and a screen where every link claims that has
+	// no accent left for the cursor.
+	Link lipgloss.AdaptiveColor
+	Key  lipgloss.AdaptiveColor // key names in a status bar
 
 	// Ground is the terminal's own background, near enough to write on: the
 	// foreground for text drawn on a band of another colour, where Text would
@@ -99,6 +104,7 @@ func DefaultPalette() Palette {
 		Primary:   lipgloss.AdaptiveColor{Light: "#4a4a4a", Dark: "#c8c8c8"},
 		Secondary: lipgloss.AdaptiveColor{Light: "#5a6b7d", Dark: "#8fa3b8"},
 		Accent:    lipgloss.AdaptiveColor{Light: "#0057d8", Dark: "#7aa2f7"},
+		Link:      lipgloss.AdaptiveColor{Light: "#4a74c0", Dark: "#6d8fd0"},
 		Resting:   lipgloss.AdaptiveColor{Light: "#7a8ba6", Dark: "#4d5a78"},
 		Key:       lipgloss.AdaptiveColor{Light: "#8f4700", Dark: "#e0af68"},
 		Ground:    lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#16161e"},
@@ -133,13 +139,17 @@ type Styles struct {
 	Heading  lipgloss.Style // a group heading
 	Item     lipgloss.Style
 	Selected lipgloss.Style
-	Desc     lipgloss.Style // secondary text beside an item
-	Label    lipgloss.Style // a field name in a detail view
-	Value    lipgloss.Style
-	Rule     lipgloss.Style
-	KeyName  lipgloss.Style // "^G"
-	KeyDesc  lipgloss.Style // "grep"
-	Cursor   lipgloss.Style // the caret of a text field being typed into
+	// Link is text that opens something elsewhere. Underlined as well as
+	// coloured, because a colour alone is a convention a reader has to learn and
+	// an underline is one they already know.
+	Link    lipgloss.Style
+	Desc    lipgloss.Style // secondary text beside an item
+	Label   lipgloss.Style // a field name in a detail view
+	Value   lipgloss.Style
+	Rule    lipgloss.Style
+	KeyName lipgloss.Style // "^G"
+	KeyDesc lipgloss.Style // "grep"
+	Cursor  lipgloss.Style // the caret of a text field being typed into
 	// Selection is text picked out in a field, drawn as a band rather than
 	// reversed: reversed is what the caret is, and a selection that looks like
 	// the caret leaves you unable to tell where typing would land.
@@ -209,6 +219,7 @@ func New(p Palette) Styles {
 		Heading:  fg(p.Dim).Bold(true),
 		Item:     fg(p.Text),
 		Selected: fg(p.Accent).Bold(true),
+		Link:     fg(p.Link).Underline(true),
 		Desc:     fg(p.Dim),
 		Label:    fg(p.Quiet),
 		Value:    fg(p.Text),
@@ -252,7 +263,7 @@ func (p Palette) AtRest() Palette {
 	q := p
 	for _, c := range []*AdaptiveColor{
 		&q.Text, &q.Dim, &q.Faint, &q.Quiet, &q.Primary, &q.Secondary,
-		&q.Accent, &q.Key, &q.Resting,
+		&q.Accent, &q.Link, &q.Key, &q.Resting,
 		&q.Success, &q.Warn, &q.Danger, &q.Cycle,
 		&q.Begun, &q.Flight, &q.Spent, &q.Voice, &q.Judge,
 	} {
@@ -391,5 +402,9 @@ func (s Styles) ForRow(selected bool) Styles {
 	} {
 		*f = s.Selected
 	}
+	// A link on the selected row takes the accent like everything else, and
+	// keeps its underline: what it is does not change because the cursor is on
+	// it, only how loudly it says so.
+	s.Link = s.Selected.Underline(true)
 	return s
 }

@@ -339,3 +339,43 @@ func TestALabelIsReadableOnEveryFill(t *testing.T) {
 		}
 	}
 }
+
+// A link is where a row hands off, and says so in two ways: an underline, which
+// a reader already knows, and a blue quieter than the accent, which means "the
+// thing you are about to act on" and would be spent if every link claimed it.
+func TestALinkIsUnderlinedAndQuieterThanTheAccent(t *testing.T) {
+	s := Default()
+	if !s.Link.GetUnderline() {
+		t.Error("a link is not underlined")
+	}
+	if s.Palette.Link == s.Palette.Accent {
+		t.Error("a link is drawn in the accent, which is the cursor's colour")
+	}
+	if s.Link.GetForeground() != lipgloss.Color(s.Palette.Link.Dark) &&
+		s.Link.GetForeground() != lipgloss.Color(s.Palette.Link.Light) {
+		// Adaptive colours resolve at render time; what matters here is only
+		// that the link does not wear the accent.
+		if s.Link.GetForeground() == s.Selected.GetForeground() {
+			t.Error("a link is the same colour as the cursor")
+		}
+	}
+
+	// On the selected row it takes the accent with everything else, and keeps
+	// the underline: what it is does not change because the cursor is there.
+	on := s.ForRow(true).Link
+	if !on.GetUnderline() {
+		t.Error("a selected link lost its underline")
+	}
+	if on.GetForeground() != s.Selected.GetForeground() {
+		t.Error("a selected link is not the accent")
+	}
+}
+
+// Every colour fades at rest, the link with them: one that stayed bright in a
+// pane nobody is typing into would be the brightest thing on it.
+func TestTheLinkColourFadesAtRest(t *testing.T) {
+	s := Default()
+	if s.AtRest().Palette.Link == s.Palette.Link {
+		t.Error("the link colour is the same at rest as in the foreground")
+	}
+}
