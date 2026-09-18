@@ -20,6 +20,7 @@ const (
 	Merge             = "\uf419" // oct-git_merge
 	PullRequestClosed = "\uf4dc" // oct-git_pull_request_closed
 	Eye               = "\uf441" // oct-eye
+	Person            = "\uf415" // oct-person
 	Comment           = "\uf41f" // oct-comment
 
 	// Where a row hands off to: a browser, or a terminal with a session in it.
@@ -47,6 +48,7 @@ var All = []struct {
 	{Merge, "merge"},
 	{PullRequestClosed, "pull request closed"},
 	{Eye, "eye"},
+	{Person, "person"},
 	{Comment, "comment"},
 	{Link, "link"},
 	{Terminal, "terminal"},

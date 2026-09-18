@@ -34,7 +34,7 @@ func TestNoGlyphIsUsedTwice(t *testing.T) {
 func TestAllCoversEveryConstant(t *testing.T) {
 	want := []string{
 		Commit, Push, Branch, Trash,
-		PullRequest, Merge, PullRequestClosed, Eye, Comment,
+		PullRequest, Merge, PullRequestClosed, Eye, Person, Comment,
 		Link, Terminal, Close, Info,
 	}
 	if len(All) != len(want) {
