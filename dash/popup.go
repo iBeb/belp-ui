@@ -24,6 +24,11 @@ type Popup struct {
 	// is made of, with a control per item rather than one control for the lot.
 	// Drawn between the body and the buttons.
 	Rows []Row
+	// Heads names those columns — the switch, the state, the note — drawn
+	// quietly above them. For a list where what the box means is not obvious
+	// from the box: "included" is a different claim from "running", and a
+	// column of ticks with no heading is read as whichever the reader expects.
+	Heads [3]string
 	// Buttons are the ways out. A popup with none is closed with escape; one
 	// with some is a question, and the focused button is the answer.
 	Buttons []Button
@@ -141,6 +146,9 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	if len(p.Rows) > 0 {
 		if len(p.Body) > 0 {
 			line("")
+		}
+		if head := p.heads(s); head != "" {
+			line(" " + head)
 		}
 		for i, r := range p.Rows {
 			line(" " + p.row(s, r, i == p.Focus, inner-4))
@@ -269,10 +277,26 @@ func (p Popup) row(s theme.Styles, r Row, focused bool, width int) string {
 	return cutTo(out, width)
 }
 
+// heads is the column names, in the columns the rows use, or nothing where the
+// caller named none.
+func (p Popup) heads(s theme.Styles) string {
+	if p.Heads == [3]string{} {
+		return ""
+	}
+	const gap = 2
+	out := padTo(s.Label.Render(p.Heads[0]), p.labelWidth()) +
+		strings.Repeat(" ", gap) + s.Label.Render(p.Heads[1])
+	if p.Heads[2] != "" {
+		out = padTo(out, p.labelWidth()+gap+p.sayWidth()) +
+			strings.Repeat(" ", gap) + s.Label.Render(p.Heads[2])
+	}
+	return out
+}
+
 // The three columns of the list, each as wide as its widest entry, so the states
 // line up down the block.
 func (p Popup) labelWidth() int {
-	n := 0
+	n := lipgloss.Width(p.Heads[0])
 	for _, r := range p.Rows {
 		n = max(n, r.Toggle.Wide())
 	}
@@ -280,7 +304,7 @@ func (p Popup) labelWidth() int {
 }
 
 func (p Popup) sayWidth() int {
-	n := 0
+	n := lipgloss.Width(p.Heads[1])
 	for _, r := range p.Rows {
 		n = max(n, lipgloss.Width(r.Say), lipgloss.Width(r.Busy))
 	}
@@ -292,7 +316,7 @@ func (p Popup) sayWidth() int {
 // because every row is padded to the widest.
 func (p Popup) rowsWide() int {
 	n := p.labelWidth() + 2 + p.sayWidth()
-	note := 0
+	note := lipgloss.Width(p.Heads[2])
 	for _, r := range p.Rows {
 		note = max(note, lipgloss.Width(r.Note))
 	}
@@ -314,6 +338,9 @@ func (s Spot) RowAt(p Popup, x, y int) (int, bool) {
 	top := 2 + len(p.Body) // the border and the pad line, then the body
 	if len(p.Body) > 0 {
 		top++ // the blank between body and rows
+	}
+	if p.Heads != [3]string{} {
+		top++ // the line naming the columns
 	}
 	i := y - (s.Y + top)
 	if i < 0 || i >= len(p.Rows) {

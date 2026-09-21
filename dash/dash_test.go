@@ -816,3 +816,41 @@ func TestAFixedRowIsDrawnSetAndQuiet(t *testing.T) {
 		}
 	}
 }
+
+// A column of boxes with no heading is read as whichever thing the reader
+// expects, and "included" is a different claim from "running". The heading sits
+// in the columns the rows use, and a click still lands on the row it points at.
+func TestTheRowColumnsCanBeNamed(t *testing.T) {
+	s := theme.Default()
+	box := Popup{
+		Body:  []string{"containers 7/9"},
+		Heads: [3]string{"included", "state", ""},
+		Rows: []Row{
+			{Toggle: Toggle{Label: "clickhouse"}, Say: "exited", Note: "optional"},
+			{Toggle: Toggle{Label: "db", On: true}, Say: "running", Fixed: true},
+		},
+	}
+	lines := box.Render(s, 56)
+
+	head, first := -1, -1
+	for i, line := range lines {
+		if strings.Contains(plain(line), "included") {
+			head = i
+		}
+		if strings.Contains(plain(line), "clickhouse") {
+			first = i
+		}
+	}
+	if head < 0 || first != head+1 {
+		t.Fatalf("the heading is at %d and the first row at %d:\n%s",
+			head, first, strings.Join(lines, "\n"))
+	}
+	// The name lines up under the heading rather than being pushed right by it.
+	at := Spot{X: 0, Y: 0, W: 56, H: len(lines)}
+	if i, ok := at.RowAt(box, 4, first); !ok || i != 0 {
+		t.Errorf("a click on the first row landed on %d (%v)", i, ok)
+	}
+	if i, ok := at.RowAt(box, 4, first+1); !ok || i != 1 {
+		t.Errorf("a click on the second row landed on %d (%v)", i, ok)
+	}
+}
