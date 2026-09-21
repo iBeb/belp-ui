@@ -68,10 +68,71 @@ type Row struct {
 	// entries are a choice and the rest are not — a switch you cannot throw
 	// still has to be visible, or the list reads as shorter than it is.
 	Fixed bool
+	// Acts are controls at the end of the row: things done to what the row
+	// names rather than to the list. Glyphs and not bands, because a row is a
+	// line of text and a filled button in the middle of one reads as a heading.
+	Acts []Button
 }
 
 // Stops is how many things in this popup the focus can land on.
-func (p Popup) Stops() int { return len(p.Rows) + len(p.Buttons) }
+func (p Popup) Stops() int {
+	n := len(p.Buttons)
+	for _, r := range p.Rows {
+		if !r.Fixed {
+			n++
+		}
+		n += len(r.Acts)
+	}
+	return n
+}
+
+// Stop is one landing place: a row's switch, the action at the end of a row, or
+// a button.
+//
+// A type rather than arithmetic at the call site. A row used to be worth one
+// stop, so the button under the focus was focus-len(Rows) everywhere — and the
+// day a row grew a second control every one of those sums was wrong by a
+// different amount.
+type Stop struct {
+	// Row is which row it belongs to, or -1 for a button.
+	Row int
+	// Act is which of that row's actions it is, or -1 for the row's own switch.
+	Act int
+	// Button is which button it is, or -1 for a row.
+	Button int
+}
+
+// At is what landing i is. Out of range comes back as nothing at all, which is
+// what a focus past the end of a shrinking list must not act on.
+func (p Popup) At(i int) Stop {
+	if i < 0 {
+		return nowhere
+	}
+	for row, r := range p.Rows {
+		if !r.Fixed {
+			if i == 0 {
+				return Stop{Row: row, Act: -1, Button: -1}
+			}
+			i--
+		}
+		for act := range r.Acts {
+			if i == 0 {
+				return Stop{Row: row, Act: act, Button: -1}
+			}
+			i--
+		}
+	}
+	if i < len(p.Buttons) {
+		return Stop{Row: -1, Act: -1, Button: i}
+	}
+	return nowhere
+}
+
+// nowhere is the stop a focus past the end of a shrinking list lands on.
+var nowhere = Stop{Row: -1, Act: -1, Button: -1}
+
+// Landed reports whether a stop is anything at all.
+func (s Stop) Landed() bool { return s.Row >= 0 || s.Button >= 0 }
 
 // Wide is how much room the popup wants, given what is in it.
 func (p Popup) Wide() int {
@@ -151,7 +212,7 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 			line(" " + head)
 		}
 		for i, r := range p.Rows {
-			line(" " + p.row(s, r, i == p.Focus, inner-4))
+			line(" " + p.row(s, r, p.focused(i), inner-4))
 		}
 	}
 	if len(p.Buttons) > 0 {
@@ -159,7 +220,7 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 		// Centred in the box rather than pushed against its left edge: the row
 		// is the one thing in a popup that is not a list of facts, and a row of
 		// buttons hard against one margin reads as the start of another column.
-		line(centre(Buttons(s, p.Buttons, p.Focus-len(p.Rows), 0), inner-2))
+		line(centre(Buttons(s, p.Buttons, p.At(p.Focus).Button, 0), inner-2))
 	}
 	if p.Note != "" {
 		line("")
@@ -258,9 +319,9 @@ func (p Popup) buttonsLeft(st theme.Styles, width int) int {
 }
 
 // row draws one line of the list: the switch, then what it is doing.
-func (p Popup) row(s theme.Styles, r Row, focused bool, width int) string {
+func (p Popup) row(s theme.Styles, r Row, on rowFocus, width int) string {
 	const gap = 2
-	label := r.Toggle.Render(s, focused && !r.Fixed)
+	label := r.Toggle.Render(s, on == onSwitch)
 	if r.Fixed {
 		// Set, and quiet: it says what is so rather than offering to change it.
 		label = s.Label.Render(toggleOn + " " + r.Toggle.Label)
@@ -270,11 +331,72 @@ func (p Popup) row(s theme.Styles, r Row, focused bool, width int) string {
 		say, style = r.Busy, s.Warn
 	}
 	out := padTo(label, p.labelWidth()) + strings.Repeat(" ", gap) + style.Render(say)
-	if r.Note != "" {
+	if note := p.noteWidth(); note > 0 {
 		out = padTo(out, p.labelWidth()+gap+p.sayWidth()) + strings.Repeat(" ", gap) +
-			s.Desc.Render(r.Note)
+			padTo(s.Desc.Render(r.Note), note)
+	}
+	if len(r.Acts) > 0 {
+		// Against the right-hand end of the block, not the left: the controls
+		// line up down the list whatever the rows in between are called, and
+		// the last cell of every row is the last control on it.
+		out = padTo(out, p.labelWidth()+gap+p.sayWidth()+noteRoom(p, gap)+
+			p.actWidth()-rowActWidth(r))
+		for i, a := range r.Acts {
+			out += strings.Repeat(" ", gap) + act(s, a, on == rowFocus(i))
+		}
 	}
 	return cutTo(out, width)
+}
+
+// rowActWidth is what one row's controls take, gaps included.
+func rowActWidth(r Row) int {
+	const gap = 2
+	n := 0
+	for _, a := range r.Acts {
+		n += gap + lipgloss.Width(a.Label)
+	}
+	return n
+}
+
+// noteRoom is what the note column and its gap take, or nothing where no row
+// has one.
+func noteRoom(p Popup, gap int) int {
+	if note := p.noteWidth(); note > 0 {
+		return gap + note
+	}
+	return 0
+}
+
+// act draws the control at the end of a row: the glyph in its own tone, or
+// reversed out while the keys are on it, the way a selected thing is drawn
+// everywhere else.
+func act(s theme.Styles, b Button, focused bool) string {
+	switch {
+	case b.Off:
+		return s.Label.Render(b.Label)
+	case focused:
+		return s.Selection.Render(b.Label)
+	default:
+		return b.Tone.style(s).Render(b.Label)
+	}
+}
+
+// rowFocus is which control of a row the keys are on: onSwitch, one of its
+// actions by index, or onNothing.
+type rowFocus int
+
+const (
+	onNothing rowFocus = -2
+	onSwitch  rowFocus = -1
+)
+
+// focused is which control of row i the keys are on, if any.
+func (p Popup) focused(i int) rowFocus {
+	at := p.At(p.Focus)
+	if at.Row != i {
+		return onNothing
+	}
+	return rowFocus(at.Act)
 }
 
 // heads is the column names, in the columns the rows use, or nothing where the
@@ -316,17 +438,37 @@ func (p Popup) sayWidth() int {
 // because every row is padded to the widest.
 func (p Popup) rowsWide() int {
 	n := p.labelWidth() + 2 + p.sayWidth()
-	note := lipgloss.Width(p.Heads[2])
-	for _, r := range p.Rows {
-		note = max(note, lipgloss.Width(r.Note))
-	}
-	if note > 0 {
+	if note := p.noteWidth(); note > 0 {
 		n += 2 + note
+	}
+	n += p.actWidth()
+	return n
+}
+
+func (p Popup) noteWidth() int {
+	n := lipgloss.Width(p.Heads[2])
+	for _, r := range p.Rows {
+		n = max(n, lipgloss.Width(r.Note))
 	}
 	return n
 }
 
-// RowAt is which of the popup's rows covers a point, for a click.
+// actWidth is what the controls at the end of a row take, gaps included: every
+// row is padded to the widest so that they line up down the block.
+func (p Popup) actWidth() int {
+	n := 0
+	for _, r := range p.Rows {
+		n = max(n, rowActWidth(r))
+	}
+	return n
+}
+
+// RowAt is which stop a click inside the list landed on: a row's switch, or the
+// action at the end of that row, by where along the line the pointer was.
+//
+// A stop rather than a row index, because a row is worth one stop or two and
+// only the popup knows which: a caller counting rows would press the switch of
+// the row below the action it was aimed at.
 //
 // Counted from the top, where the rows are: the body above them is a known
 // number of lines and so is the padding, which is the only way a click and a
@@ -342,14 +484,41 @@ func (s Spot) RowAt(p Popup, x, y int) (int, bool) {
 	if p.Heads != [3]string{} {
 		top++ // the line naming the columns
 	}
-	i := y - (s.Y + top)
-	if i < 0 || i >= len(p.Rows) {
+	row := y - (s.Y + top)
+	if row < 0 || row >= len(p.Rows) {
 		return 0, false
 	}
 	if x < s.X+2 || x >= s.X+s.W-2 {
 		return 0, false
 	}
-	return i, true
+
+	// Which of the row's own controls, by where along it the pointer landed:
+	// the action sits at the end of the line, everything before it is the
+	// switch. A row with no switch answers only over its action.
+	// Which of the row's own controls, by where along it the pointer landed:
+	// the actions sit at the end of the line in order, everything before them
+	// is the switch. A row with no switch answers only over its actions.
+	r := p.Rows[row]
+	want := -1 // the switch
+	if at := x - (s.X + 2 + p.rowsWide() - rowActWidth(r)); at >= 0 {
+		const gap = 2
+		for i, a := range r.Acts {
+			if at < gap+lipgloss.Width(a.Label) {
+				want = i
+				break
+			}
+			at -= gap + lipgloss.Width(a.Label)
+		}
+	}
+	if r.Fixed && want < 0 {
+		return 0, false
+	}
+	for i := 0; i < p.Stops(); i++ {
+		if at := p.At(i); at.Row == row && at.Act == want {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // ShutAt reports whether a point is on the mark that closes the window.

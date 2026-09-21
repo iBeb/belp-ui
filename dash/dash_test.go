@@ -850,7 +850,73 @@ func TestTheRowColumnsCanBeNamed(t *testing.T) {
 	if i, ok := at.RowAt(box, 4, first); !ok || i != 0 {
 		t.Errorf("a click on the first row landed on %d (%v)", i, ok)
 	}
-	if i, ok := at.RowAt(box, 4, first+1); !ok || i != 1 {
-		t.Errorf("a click on the second row landed on %d (%v)", i, ok)
+	// The second row states a fact and offers nothing, so a click on it does
+	// nothing rather than pressing the switch above it.
+	if i, ok := at.RowAt(box, 4, first+1); ok {
+		t.Errorf("a click on a fixed row landed on %d", i)
+	}
+}
+
+// A row can carry a second control at the end of it: something done to the
+// thing the row names rather than to the list.
+func TestARowCanCarryAnAction(t *testing.T) {
+	s := theme.Default()
+	box := Popup{
+		Rows: []Row{
+			{Toggle: Toggle{Label: "clickhouse"}, Say: "exited", Note: "optional",
+				Acts: []Button{{Label: "▸", Tone: Success}, {Label: "ⓘ", Tone: Info}}},
+			{Toggle: Toggle{Label: "db", On: true}, Say: "running", Fixed: true,
+				Acts: []Button{{Label: "▮▮", Tone: Warning}, {Label: "ⓘ", Tone: Info}}},
+		},
+		Buttons: []Button{{Label: "close"}},
+	}
+
+	// Three stops on the first row — its switch and its two actions — two on
+	// the second, which has no switch, and the button after them.
+	if got := box.Stops(); got != 6 {
+		t.Fatalf("%d stops, want 6", got)
+	}
+	for i, want := range []Stop{
+		{Row: 0, Act: -1, Button: -1}, {Row: 0, Act: 0, Button: -1},
+		{Row: 0, Act: 1, Button: -1},
+		{Row: 1, Act: 0, Button: -1}, {Row: 1, Act: 1, Button: -1},
+		{Row: -1, Act: -1, Button: 0},
+	} {
+		if got := box.At(i); got != want {
+			t.Errorf("stop %d is %+v, want %+v", i, got, want)
+		}
+	}
+	if box.At(6).Landed() {
+		t.Error("a stop past the end landed on something")
+	}
+
+	lines := box.Render(s, 56)
+	first := -1
+	for i, line := range lines {
+		if strings.Contains(plain(line), "clickhouse") {
+			first = i
+		}
+	}
+	if first < 0 || !strings.Contains(plain(lines[first]), "▸") {
+		t.Fatalf("the action is not drawn on the row:\n%s", strings.Join(lines, "\n"))
+	}
+
+	// A click at the end of the line presses the action; one over the name
+	// presses the switch.
+	at := Spot{X: 0, Y: 0, W: 56, H: len(lines)}
+	end := 2 + box.rowsWide() - 1
+	if i, ok := at.RowAt(box, end, first); !ok || i != 2 {
+		t.Errorf("a click on the last action landed on %d (%v)", i, ok)
+	}
+	if i, ok := at.RowAt(box, 5, first); !ok || i != 0 {
+		t.Errorf("a click on the switch landed on %d (%v)", i, ok)
+	}
+	// And on the row below, whose switch cannot be thrown, only the actions
+	// answer.
+	if i, ok := at.RowAt(box, end, first+1); !ok || i != 4 {
+		t.Errorf("a click on the second row's last action landed on %d (%v)", i, ok)
+	}
+	if _, ok := at.RowAt(box, 5, first+1); ok {
+		t.Error("the switch of a fixed row answered a click")
 	}
 }
