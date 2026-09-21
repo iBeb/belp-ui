@@ -58,6 +58,11 @@ type Row struct {
 	// Busy replaces Say while the switch is being thrown, because a row that
 	// says nothing for the several seconds a container takes looks broken.
 	Busy string
+	// Fixed is a row that states something rather than switching it: the box is
+	// drawn set and quiet, and the focus steps over it. For a list where some
+	// entries are a choice and the rest are not — a switch you cannot throw
+	// still has to be visible, or the list reads as shorter than it is.
+	Fixed bool
 }
 
 // Stops is how many things in this popup the focus can land on.
@@ -247,7 +252,11 @@ func (p Popup) buttonsLeft(st theme.Styles, width int) int {
 // row draws one line of the list: the switch, then what it is doing.
 func (p Popup) row(s theme.Styles, r Row, focused bool, width int) string {
 	const gap = 2
-	label := r.Toggle.Render(s, focused)
+	label := r.Toggle.Render(s, focused && !r.Fixed)
+	if r.Fixed {
+		// Set, and quiet: it says what is so rather than offering to change it.
+		label = s.Label.Render(toggleOn + " " + r.Toggle.Label)
+	}
 	say, style := r.Say, s.Value
 	if r.Busy != "" {
 		say, style = r.Busy, s.Warn

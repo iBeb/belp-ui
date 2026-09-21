@@ -775,3 +775,44 @@ func foreground(hex string) string {
 	_, _ = fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
 	return fmt.Sprintf("38;2;%d;%d;%d", r, g, b)
 }
+
+// A list where some entries are a choice and the rest are not still shows all
+// of them: a switch you cannot throw has to be visible, or the list reads as
+// shorter than it is. It is drawn set and quiet, and never as the focus.
+func TestAFixedRowIsDrawnSetAndQuiet(t *testing.T) {
+	s := theme.Default()
+	box := Popup{Rows: []Row{
+		{Toggle: Toggle{Label: "web", On: true}, Say: "running", Fixed: true},
+		{Toggle: Toggle{Label: "clickhouse"}, Say: "exited", Note: "optional"},
+	}}
+	lines := box.Render(s, 48)
+
+	var fixed, choice string
+	for _, line := range lines {
+		if strings.Contains(plain(line), "web") {
+			fixed = line
+		}
+		if strings.Contains(plain(line), "clickhouse") {
+			choice = line
+		}
+	}
+	if fixed == "" || choice == "" {
+		t.Fatalf("both rows are not drawn:\n%s", strings.Join(lines, "\n"))
+	}
+	if !strings.Contains(plain(fixed), theme.BoxAll) {
+		t.Errorf("a fixed row is not drawn set: %q", plain(fixed))
+	}
+	if !strings.Contains(plain(choice), theme.BoxNone) {
+		t.Errorf("a switch that is off is not drawn empty: %q", plain(choice))
+	}
+
+	// Focused, it is drawn exactly as it was: the focus steps over it, and a
+	// row that lights up under a cursor that cannot press it is a lie.
+	box.Focus = 0
+	same := box.Render(s, 48)
+	for i := range lines {
+		if lines[i] != same[i] {
+			t.Errorf("the focus changed a fixed row:\n%q\n%q", lines[i], same[i])
+		}
+	}
+}
