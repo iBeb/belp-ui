@@ -188,7 +188,12 @@ func (p Popup) Render(s theme.Styles, width int) []string {
 	}
 	rule := inner - lipgloss.Width(shut) - lipgloss.Width(head)
 	if rule < 0 {
-		head, rule = " ", max(0, inner-lipgloss.Width(shut)-1)
+		// Cut, not dropped. Replaced with a space, a title one cell too long
+		// left the border blank — and the window with the most to say, a verb
+		// that stopped with the reason in its title, was the one drawn saying
+		// nothing at all.
+		head = " " + s.Heading.Render(cutTo(p.Title, max(1, inner-lipgloss.Width(shut)-2))) + " "
+		rule = max(0, inner-lipgloss.Width(shut)-lipgloss.Width(head))
 	}
 	out := []string{edge.Render("╭") + shut + head +
 		edge.Render(strings.Repeat("─", rule)+"╮")}
