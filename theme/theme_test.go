@@ -2,11 +2,15 @@ package theme
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/creack/pty"
+	"github.com/muesli/termenv"
 )
 
 var hex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -378,4 +382,45 @@ func TestTheLinkColourFadesAtRest(t *testing.T) {
 	if s.AtRest().Palette.Link == s.Palette.Link {
 		t.Error("the link colour is the same at rest as in the foreground")
 	}
+}
+
+// The colours are the terminal's to allow, and the terminal is the one being
+// drawn on — not stdout.
+//
+// A command whose stdout is read by a shell draws its screen on /dev/tty.
+// Asked about the pipe, lipgloss says no colour at all and the screen comes out
+// in plain grey beside the same component in a program that owns its stdout.
+func TestTheColoursComeFromTheTerminalBeingDrawnOn(t *testing.T) {
+	was := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(was) })
+
+	// A pipe allows nothing, which is what stdout is for these commands.
+	lipgloss.SetColorProfile(termenv.Ascii)
+	if said := Default().Item.Render("x"); strings.Contains(said, "\x1b[") {
+		t.Fatalf("a profile that allows nothing painted %q", said)
+	}
+
+	// The terminal is asked instead, and says what it says. A test has no
+	// terminal to open, so the question is put to a pty.
+	pty, tty, err := openPty()
+	if err != nil {
+		t.Skipf("no pty here: %v", err)
+	}
+	defer pty.Close()
+	defer tty.Close()
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("COLORTERM", "truecolor")
+
+	On(tty)
+	if got := lipgloss.ColorProfile(); got == termenv.Ascii {
+		t.Error("asked about a terminal, it still allows no colour")
+	}
+	if said := On(tty).Item.Render("x"); !strings.Contains(said, "\x1b[") {
+		t.Errorf("it drew %q on a terminal that allows colour", said)
+	}
+}
+
+// openPty is a terminal to ask about, since a test has none of its own.
+func openPty() (*os.File, *os.File, error) {
+	return pty.Open()
 }

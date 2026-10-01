@@ -9,8 +9,10 @@ package theme
 import (
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // Palette is the colours, and only the colours.
@@ -243,6 +245,26 @@ func New(p Palette) Styles {
 
 // Default is what an app uses when it has no reason to customise.
 func Default() Styles { return New(DefaultPalette()) }
+
+// On is the styles for the terminal being drawn on, with the colours that
+// terminal allows.
+//
+// Asked of that terminal rather than of stdout, which is what lipgloss asks by
+// default and which is not always where the screen goes: a command whose stdout
+// is read by the shell — belp's launchers print the line it runs — draws on
+// /dev/tty, and being asked about the pipe it is told it may use no colour at
+// all. The whole screen then comes out in plain grey beside the same component
+// in a program that happens to own its stdout.
+//
+// Here rather than in each app, because every screen in this suite is drawn
+// with these styles and none of them should have to know that lipgloss decides
+// this from a file descriptor.
+func On(tty *os.File) Styles {
+	if tty != nil {
+		lipgloss.SetColorProfile(termenv.NewOutput(tty).Profile)
+	}
+	return Default()
+}
 
 // Rest is how far a resting palette moves toward the background: a light,
 // even hand.
