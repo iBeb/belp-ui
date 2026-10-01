@@ -43,6 +43,12 @@ type Cell struct {
 	// Give is the order columns are given up in as the line narrows: the
 	// largest goes first, and zero never goes.
 	Give int
+	// Tint is a colour of its own for a column whose colour is part of what it
+	// says — which kind of work a row is, how far along something got. Taken
+	// from the styles the row is drawn with, so a selected row is still the
+	// accent throughout: what it is told is the row's styles, and those are
+	// already the accent when the keys are on it.
+	Tint func(theme.Styles) lipgloss.Style
 }
 
 // Line draws a row: a mark in the margin, then the columns.
@@ -103,6 +109,9 @@ func Line(s theme.Styles, selected bool, width int, mark string, cells ...Cell) 
 			continue
 		}
 		style := weighed(s, c.Weight)
+		if c.Tint != nil {
+			style = c.Tint(s)
+		}
 		if i == flex {
 			said := elide(c.Text, max(room(), 0))
 			b.WriteString(style.Render(said))

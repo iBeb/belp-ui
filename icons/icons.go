@@ -23,6 +23,10 @@ const (
 	Person            = "\uf415" // oct-person
 	Comment           = "\uf41f" // oct-comment
 
+	// What a piece of work is: a ticket with things left to do on it, somebody
+	// else's branch, and one being checked where it has shipped to.
+	Tasklist = "\uf4a0" // oct-tasklist
+
 	// Where a row hands off to: a browser, or a terminal with a session in it.
 	Link     = "\uf465" // oct-link_external
 	Terminal = "\uf489" // oct-terminal
