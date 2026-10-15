@@ -164,7 +164,22 @@ type Chrome struct {
 
 	// Placeholder shows in the search field while it is empty.
 	Placeholder string
+
+	// AtRest is true while the keyboard is in another app — another panel of a
+	// grid, another window. Separate from Focus, which says where the keys are
+	// within this screen and is just as true of a screen nobody is typing into.
+	//
+	// Quieter colours alone were not enough to say it. Every app in a grid draws
+	// its own field with the accent border and a filled caret in it, so two
+	// panels side by side both read as the one being typed into, and the caret
+	// in the panel that is not is a plain lie: there is no keystroke it could
+	// take. So the caret belongs to the app that has the keys, and only to it.
+	AtRest bool
 }
+
+// typing reports whether the search field is where the next keystroke lands:
+// the focus within this screen, and the keyboard being in this screen at all.
+func (c Chrome) typing() bool { return c.Focus == FocusSearch && !c.AtRest }
 
 // Confirm is a yes-or-no question and what turns on the answer.
 //
@@ -504,7 +519,7 @@ func (c Chrome) openMenu() (Group, bool) {
 // left there.
 func (c Chrome) Search(width int) string {
 	s := c.Styles
-	focused := c.Focus == FocusSearch
+	focused := c.typing()
 
 	prompt := s.Desc.Render(theme.Magnifier)
 	if focused {
@@ -649,7 +664,7 @@ func (c Chrome) SearchBox(width int) []string {
 	}
 
 	edge := c.Styles.Palette.Faint
-	if c.Focus == FocusSearch {
+	if c.typing() {
 		edge = c.Styles.Palette.Accent
 	}
 	box := lipgloss.NewStyle().
@@ -831,7 +846,7 @@ func (c Chrome) promptBody(room int) []string {
 
 	return []string{
 		s.Selected.Render(label),
-		typed(s, c.Prompt.field(), room, true),
+		typed(s, c.Prompt.field(), room, !c.AtRest),
 		"",
 		s.KeyName.Render("↵") + " " + s.KeyDesc.Render("confirm") + keyGap +
 			s.KeyName.Render("␛") + " " + s.KeyDesc.Render("cancel"),

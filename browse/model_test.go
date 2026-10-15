@@ -1667,6 +1667,30 @@ func TestBlurDrawsQuieterAndFocusRestoresIt(t *testing.T) {
 	}
 }
 
+// A blurred app takes its caret off the screen.
+//
+// The quieter palette was not enough on its own: two panels of a grid both drew
+// the accent border and a filled block in their search fields, so both read as
+// the one being typed into. A caret in a field that cannot take a keystroke is
+// not a quiet signal, it is a wrong one.
+func TestBlurTakesTheCaretOffTheScreen(t *testing.T) {
+	m := model(10)
+	m.chrome.Focus, m.chrome.Query, m.chrome.Caret = FocusSearch, "geo", 3
+	m.width, m.height = 80, 20
+
+	if !strings.Contains(m.View(), theme.Caret) {
+		t.Fatal("the app with the keys draws no caret")
+	}
+	m, _ = m.Update(tea.BlurMsg{})
+	if strings.Contains(m.View(), theme.Caret) {
+		t.Error("a blurred app still draws a caret in its search field")
+	}
+	m, _ = m.Update(tea.FocusMsg{})
+	if !strings.Contains(m.View(), theme.Caret) {
+		t.Error("the caret did not come back when the keys did")
+	}
+}
+
 // Blurring is about how it is drawn and nothing else: the cursor stays where it
 // was, so coming back does not mean finding your place again.
 func TestBlurChangesNothingButTheColours(t *testing.T) {

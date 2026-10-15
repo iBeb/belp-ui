@@ -250,10 +250,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	// itself a step quieter for as long as they are. Only one panel should look
 	// like the one being typed into, and the terminal is what knows which.
 	case tea.BlurMsg:
-		m.chrome.Styles = m.resting
+		m.chrome.Styles, m.chrome.AtRest = m.resting, true
 		return m, nil
 	case tea.FocusMsg:
-		m.chrome.Styles = m.awake
+		m.chrome.Styles, m.chrome.AtRest = m.awake, false
 		return m, nil
 
 	}

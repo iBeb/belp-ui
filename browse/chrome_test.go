@@ -561,3 +561,54 @@ func TestASetChipIsMarkedAndNotOnlyColoured(t *testing.T) {
 
 // firstOf drops the spans, for a test that only wants the bar.
 func firstOf(bar string, _ []span) string { return bar }
+
+// Only the app the keyboard is in draws a caret.
+//
+// Two panels of a grid both drawing one is two apps claiming the keys. The
+// quieter palette alone did not say it: the resting blue is the same blue a
+// fraction of the way to the background, and a filled block is a filled block.
+func TestOnlyTheAppWithTheKeysDrawsACaret(t *testing.T) {
+	c := sample()
+	c.Focus = FocusSearch
+	c.Caret = len(c.Query)
+
+	if got := c.Search(40); !strings.Contains(got, theme.Caret) {
+		t.Fatalf("Search() = %q, want a caret while this app has the keys", got)
+	}
+	c.AtRest = true
+	if got := c.Search(40); strings.Contains(got, theme.Caret) {
+		t.Errorf("Search() = %q, want no caret while the keys are elsewhere", got)
+	}
+
+	// And the box around it stops wearing the colour that means "the keyboard
+	// points here" — the same colour the selected row wears.
+	c.AtRest = false
+	lit := strings.Join(c.SearchBox(40), "\n")
+	c.AtRest = true
+	rested := strings.Join(c.SearchBox(40), "\n")
+	if lit == rested {
+		t.Error("the search box is drawn the same whether or not this app has the keys")
+	}
+
+	c.Focus, c.AtRest = FocusList, false
+	if quiet := strings.Join(c.SearchBox(40), "\n"); rested != quiet {
+		t.Errorf("a resting field is not drawn like an unfocused one:\n%q\n%q",
+			rested, quiet)
+	}
+}
+
+// A question drawn over a resting list keeps its own caret off for the same
+// reason the field does.
+func TestAQuestionInARestingAppDrawsNoCaret(t *testing.T) {
+	c := sample()
+	c.Focus = FocusPrompt
+	c.Prompt = Prompt{Label: "title: ", Text: "a name", Caret: 6}
+
+	if got := strings.Join(c.Window(40), "\n"); !strings.Contains(got, theme.Caret) {
+		t.Fatalf("Window() = %q, want a caret while this app has the keys", got)
+	}
+	c.AtRest = true
+	if got := strings.Join(c.Window(40), "\n"); strings.Contains(got, theme.Caret) {
+		t.Errorf("Window() = %q, want no caret while the keys are elsewhere", got)
+	}
+}
