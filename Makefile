@@ -10,8 +10,21 @@ check: fmt vet lint test ## everything CI runs
 build: ## compile every package
 	go build ./...
 
-test: ## run the tests with the race detector
+test: ## run the tests with the race detector, then again as CI's shell
 	go test -race ./...
+# A second run of the packages that drive a shell, against dash.
+#
+# /bin/sh is bash-ish on a Mac and dash on the machines CI uses, so a test
+# written against one passes here and fails there — which is how two pushes in a
+# row went red on something a local run could never have seen. Skipped where
+# dash is not installed rather than failing: it is a second opinion, not a
+# dependency.
+	@if command -v dash >/dev/null; then \
+		echo "go test ./grid ./pane  (BELP_TEST_SH=dash)"; \
+		BELP_TEST_SH=$$(command -v dash) go test -count=1 ./grid/ ./pane/; \
+	else \
+		echo "dash not installed — skipping the second shell"; \
+	fi
 
 fmt: ## rewrite formatting, then fail if anything changed
 	gofmt -l -w .
