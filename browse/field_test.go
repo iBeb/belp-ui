@@ -416,3 +416,116 @@ func TestTheSelectionIsDrawn(t *testing.T) {
 		}
 	}
 }
+
+// drag is a mouse move with the left button held, which is what a terminal
+// sends between a press and a release.
+func drag(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion}
+}
+
+func release(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease}
+}
+
+// Dragging across the field selects, as it would in any other text field.
+//
+// The terminal cannot do this for us: mouse reporting is on, so it hands every
+// click to the app instead of making a native selection. Before this the app
+// dropped motion on the floor, so neither side selected and the mouse did
+// nothing at all.
+func TestDraggingAcrossTheFieldSelects(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	const width = 80
+	m := launched(5)
+	m.SetSize(width, 30)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("cherry", "") {
+		m, _ = press(m, r)
+	}
+
+	line := []rune(plainLine(m, m.Layout().Search.Y+1))
+	at := indexRunes(line, "cherry")
+	if at < 0 {
+		t.Fatalf("the query is not on the line: %q", string(line))
+	}
+	y := m.Layout().Search.Y + 1
+
+	// From before the "e" to before the "r": "err".
+	m, _ = m.Update(click(at+2, y))
+	m, _ = m.Update(drag(at+5, y))
+	if got := m.Selected(); got != "err" {
+		t.Errorf("dragging selected %q, want %q", got, "err")
+	}
+
+	// And dragging back the other way selects the other way round.
+	m, _ = m.Update(drag(at+1, y))
+	if got := m.Selected(); got != "h" {
+		t.Errorf("dragging back selected %q, want %q", got, "h")
+	}
+}
+
+// Letting go of a drag copies what was selected. ⌘C is the terminal's own key
+// and never reaches a program running in it, so the selection has to put
+// itself on the clipboard.
+func TestLettingGoOfADragCopies(t *testing.T) {
+	const width = 80
+	m := launched(5)
+	m.SetSize(width, 30)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("cherry", "") {
+		m, _ = press(m, r)
+	}
+	line := []rune(plainLine(m, m.Layout().Search.Y+1))
+	at := indexRunes(line, "cherry")
+	y := m.Layout().Search.Y + 1
+
+	m, _ = m.Update(click(at, y))
+	m, _ = m.Update(drag(at+6, y))
+	m, cmd := m.Update(release(at+6, y))
+	if m.Selected() != "cherry" {
+		t.Fatalf("the drag selected %q", m.Selected())
+	}
+	if cmd == nil {
+		t.Fatal("letting go of a drag copied nothing")
+	}
+
+	// Releasing with nothing selected asks for no copy, rather than putting an
+	// empty string on the clipboard and losing whatever was there.
+	m, _ = m.Update(click(at+2, y))
+	if _, cmd := m.Update(release(at+2, y)); cmd != nil {
+		t.Error("a click with no selection still copied")
+	}
+}
+
+// ^Y copies from either field, since ⌘C reaches neither.
+func TestCopyKeyTakesTheSelection(t *testing.T) {
+	m := launched(5)
+	m, _ = press(m, "ctrl+u")
+	for _, r := range strings.Split("one two", "") {
+		m, _ = press(m, r)
+	}
+	m, _ = press(m, "home", "alt+shift+right")
+	if got := m.Selected(); got != "one" {
+		t.Fatalf("Selected() = %q, want %q", got, "one")
+	}
+	if _, cmd := m.Update(key("ctrl+y")); cmd == nil {
+		t.Error("^Y with a selection copied nothing")
+	}
+	m, _ = press(m, "right") // drops the selection
+	if _, cmd := m.Update(key("ctrl+y")); cmd != nil {
+		t.Error("^Y with nothing selected still copied")
+	}
+
+	p := launched(5)
+	p.chrome.Focus = FocusPrompt
+	p.chrome.Prompt = Prompt{Label: "rename", Text: "abc", Caret: 3}
+	p, _ = press(p, "shift+home")
+	if got := p.Selected(); got != "abc" {
+		t.Errorf("the window's answer selected %q, want %q", got, "abc")
+	}
+	if _, cmd := p.Update(key("ctrl+y")); cmd == nil {
+		t.Error("^Y in the window's answer copied nothing")
+	}
+}

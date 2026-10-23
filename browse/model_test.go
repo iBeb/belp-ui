@@ -72,6 +72,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
 	case "ctrl+q":
 		return tea.KeyMsg{Type: tea.KeyCtrlQ}
+	case "ctrl+y":
+		return tea.KeyMsg{Type: tea.KeyCtrlY}
 	case "ctrl+a":
 		return tea.KeyMsg{Type: tea.KeyCtrlA}
 	case "ctrl+e":

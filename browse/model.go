@@ -290,8 +290,24 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Dragging across the field selects, and letting go copies what was
+	// selected. The terminal cannot do either for us: mouse reporting is on, so
+	// clicks come here instead of making a native selection, and ⌘C is the
+	// terminal's own key that no program in it gets to see.
+	if msg.Button == tea.MouseButtonLeft && m.chrome.Focus == FocusSearch &&
+		!l.Search.Empty() && msg.Y == l.Search.Y+1 {
+		switch msg.Action {
+		case tea.MouseActionMotion:
+			f := m.chrome.field().move(m.chrome.CaretAt(msg.X, l.Width), true)
+			m.setField(f)
+			return m, nil
+		case tea.MouseActionRelease:
+			return m, copyText(m.Selected())
+		}
+	}
+
 	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
-		return m, nil // releases, motion and other buttons are not ours
+		return m, nil // releases elsewhere, motion and other buttons are not ours
 	}
 
 	// An open menu covers the list, so it answers first: a click on a member is
@@ -558,6 +574,11 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.cursor = max(0, m.count-1)
 		}
 
+	// ^Y copies what is selected. ⌘C belongs to the terminal and never reaches
+	// a program running in it, so a selection drawn by us needs a key of ours.
+	case "ctrl+y":
+		return m, copyText(m.Selected())
+
 	// ^U clears from anywhere, because it is advertised in the footer and a key
 	// in the footer that only works in one band is a key that looks broken.
 	case "ctrl+u":
@@ -610,6 +631,9 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		label, _ := m.close()
 		return m, func() tea.Msg { return CancelledMsg{Label: label} }
 
+	case "ctrl+y":
+		return m, copyText(selectedText(m.chrome.Prompt.field()))
+
 	case "ctrl+u":
 		m.chrome.Prompt.Text, m.chrome.Prompt.Caret, m.chrome.Prompt.Sel = "", 0, false
 		return m, nil
@@ -622,6 +646,25 @@ func (m Model) prompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.chrome.Prompt.Anchor, m.chrome.Prompt.Sel = f.Anchor, f.Sel
 	}
 	return m, nil
+}
+
+// Selected is the text picked out in whichever field has the keys, or "" when
+// nothing is. Exported because an app may want to act on a selection itself —
+// and because a copy that cannot be read back is a copy nothing can test.
+func (m Model) Selected() string {
+	if m.chrome.Focus == FocusPrompt {
+		return selectedText(m.chrome.Prompt.field())
+	}
+	return selectedText(m.chrome.field())
+}
+
+// selectedText is the run between a field's anchor and its cursor.
+func selectedText(f field) string {
+	lo, hi, ok := f.sel()
+	if !ok {
+		return ""
+	}
+	return string([]rune(f.Text)[lo:hi])
 }
 
 // setField puts an edited line back into the search band.
