@@ -95,6 +95,9 @@ type Model struct {
 
 	chrome Chrome
 
+	// sw is a drag across the screen, selecting what it passes over.
+	sw *sweep
+
 	count  int // how many rows there are
 	cursor int // which one the cursor is on
 	top    int // the first row on screen
@@ -242,6 +245,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.SetSize(msg.Width, msg.Height)
 		return m, nil
 	case tea.KeyMsg:
+		// Typing leaves a selection behind, as it does in any text.
+		m.sw = nil
 		return m.key(msg)
 	case tea.MouseMsg:
 		return m.mouse(msg)
@@ -294,8 +299,8 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 	// selected. The terminal cannot do either for us: mouse reporting is on, so
 	// clicks come here instead of making a native selection, and ⌘C is the
 	// terminal's own key that no program in it gets to see.
-	if msg.Button == tea.MouseButtonLeft && m.chrome.Focus == FocusSearch &&
-		!l.Search.Empty() && msg.Y == l.Search.Y+1 {
+	inField := m.chrome.Focus == FocusSearch && !l.Search.Empty() && msg.Y == l.Search.Y+1
+	if msg.Button == tea.MouseButtonLeft && inField {
 		switch msg.Action {
 		case tea.MouseActionMotion:
 			f := m.chrome.field().move(m.chrome.CaretAt(msg.X, l.Width), true)
@@ -303,6 +308,15 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			return m, nil
 		case tea.MouseActionRelease:
 			return m, copyText(m.Selected())
+		}
+	}
+
+	// Anywhere else, a drag selects whatever it passes over.
+	if !inField || msg.Action == tea.MouseActionPress {
+		var cmd tea.Cmd
+		var took bool
+		if m, cmd, took = m.sweeping(msg); took {
+			return m, cmd
 		}
 	}
 
@@ -865,7 +879,7 @@ func (m *Model) clamp() {
 // View draws the screen.
 func (m Model) View() string {
 	l := m.Layout()
-	return m.drawn().Render(l, m.rows(l), m.previewLines(l))
+	return m.banded(m.drawn().Render(l, m.rows(l), m.previewLines(l)))
 }
 
 // drawn is the chrome as the screen has it.

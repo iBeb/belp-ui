@@ -529,3 +529,53 @@ func TestCopyKeyTakesTheSelection(t *testing.T) {
 		t.Error("^Y in the window's answer copied nothing")
 	}
 }
+
+// Anything on the screen can be selected, not only the field: a drag over the
+// list picks out the rows it crosses, as they read, and letting go copies them.
+// A press that does not move is still a click.
+func TestADragAnywhereSelectsWhatItCrosses(t *testing.T) {
+	was := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(was) })
+	m := model(5)
+	rows := strings.Split(codesRE.ReplaceAllString(m.View(), ""), "\n")
+	y := -1
+	for i, r := range rows {
+		if strings.Contains(r, "row1") {
+			y = i
+			break
+		}
+	}
+	if y < 0 {
+		t.Fatalf("no row1 drawn:\n%s", strings.Join(rows, "\n"))
+	}
+	x := lipgloss.Width(rows[y][:strings.Index(rows[y], "row1")])
+	at := func(act tea.MouseAction, x, y int) tea.MouseMsg {
+		return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: act}
+	}
+	m, _ = m.Update(at(tea.MouseActionPress, x, y))
+	m, _ = m.Update(at(tea.MouseActionMotion, x+3, y+1))
+	if got := m.Swept(); got != "row1\n row2" { // the space is the cursor column
+		t.Errorf("the drag picked out %q", got)
+	}
+	m, cmd := m.Update(at(tea.MouseActionRelease, x+3, y+1))
+	if cmd == nil {
+		t.Error("letting go copied nothing")
+	}
+	if !strings.Contains(m.View(), m.chrome.Styles.Selection.Render("row1")) {
+		t.Error("the selection is not drawn")
+	}
+	// Typing takes it away; a click selects nothing and still moves the cursor.
+	m, _ = press(m, "down")
+	if m.Swept() != "" {
+		t.Error("typing left the selection behind")
+	}
+	m, _ = m.Update(at(tea.MouseActionPress, x, y+2))
+	m, cmd = m.Update(at(tea.MouseActionRelease, x, y+2))
+	if m.Swept() != "" || cmd != nil {
+		t.Errorf("a click selected %q", m.Swept())
+	}
+	if m.cursor != 3 {
+		t.Errorf("a click on row3 left the cursor on %d", m.cursor)
+	}
+}
