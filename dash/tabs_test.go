@@ -1,6 +1,7 @@
 package dash
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -108,3 +109,41 @@ func TestSpansLandOnTheTabsThemselves(t *testing.T) {
 		t.Errorf("the spans run to %d, want the %d cells the tabs take", got, tabs.Wide())
 	}
 }
+
+// The current tab is marked by colour, not by an underline: an underline under
+// a word in a row of words reads as a link. Blue either way, and filled where
+// the cursor is on the strip, so the two states are the same mark at two
+// weights rather than two different ideas.
+func TestTheCurrentTabIsBlueAndNeverUnderlined(t *testing.T) {
+	tabs := Tabs{Labels: []string{"staging", "demo"}}
+	for _, focused := range []bool{false, true} {
+		got := tabs.Render(theme.Default(), focused, 60)
+		if underlined(got) {
+			t.Errorf("focused=%v: the strip underlines something", focused)
+		}
+		if !strings.Contains(plain(got), "[ staging ]") {
+			t.Errorf("focused=%v: the current tab is not drawn: %q", focused, plain(got))
+		}
+	}
+	// The cursor being on it has to look different from it merely being current,
+	// or there is no cursor.
+	if a, b := tabs.Render(theme.Default(), false, 60), tabs.Render(theme.Default(), true, 60); a == b {
+		t.Error("the strip looks the same whether the cursor is on it or not")
+	}
+}
+
+// underlined reports whether any escape in the string turns SGR 4 on. The
+// styles arrive per rune and combined with the colour, so the parameter has to
+// be read out of the sequence rather than matched as a whole.
+func underlined(s string) bool {
+	for _, seq := range sgr.FindAllStringSubmatch(s, -1) {
+		for _, p := range strings.Split(seq[1], ";") {
+			if p == "4" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+var sgr = regexp.MustCompile(`\x1b\[([0-9;]*)m`)

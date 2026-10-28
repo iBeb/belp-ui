@@ -22,7 +22,6 @@ type Tabs struct {
 	// does not reach are simply unmarked.
 	Marked []bool
 	Active int
-	Tone   Tone
 }
 
 // The mark on a tab that has something running under it, and the brackets the
@@ -43,9 +42,12 @@ func (t Tabs) Render(s theme.Styles, focused bool, width int) string {
 	if len(t.Labels) == 0 {
 		return ""
 	}
-	here := t.Tone.style(s)
+	// The usual blue for the tab that is current, filled where the cursor is on
+	// the strip. No underline: an underline under a word in a row of words reads
+	// as a link, and the colour is the app's own mark for "this is the one".
+	here := s.Selected
 	if focused {
-		here = here.Bold(true).Underline(true)
+		here = s.Selection
 	}
 	parts := make([]string, len(t.Labels))
 	for i, label := range t.Labels {
