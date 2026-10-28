@@ -84,3 +84,27 @@ func TestWideCountsTheTabsAndTheirMarks(t *testing.T) {
 		t.Error("Wide() ignores the marks, which are drawn")
 	}
 }
+
+// Every tab is its own click target, so the spans have to be where the tabs
+// actually are: a strip whose offsets are a guess is a strip that selects the
+// tab beside the one aimed at.
+func TestSpansLandOnTheTabsThemselves(t *testing.T) {
+	tabs := Tabs{Labels: []string{"staging", "demo"}, Marked: []bool{false, true}}
+	drawn := []rune(plainTabs(tabs, false, 80))
+	spans := tabs.Spans()
+	if len(spans) != 2 {
+		t.Fatalf("Spans() = %v, want one per tab", spans)
+	}
+	for i, label := range tabs.Labels {
+		at, w := spans[i][0], spans[i][1]
+		got := strings.TrimSpace(string(drawn[at : at+w]))
+		if !strings.Contains(got, label) {
+			t.Errorf("span %d covers %q, want the tab saying %q", i, got, label)
+		}
+	}
+	// The last span ends where the tabs end, before the rule.
+	last := spans[len(spans)-1]
+	if got := last[0] + last[1]; got != tabs.Wide() {
+		t.Errorf("the spans run to %d, want the %d cells the tabs take", got, tabs.Wide())
+	}
+}

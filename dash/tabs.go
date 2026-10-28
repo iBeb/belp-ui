@@ -71,6 +71,20 @@ func (t Tabs) mark(i int) string {
 	return ""
 }
 
+// Spans is where each tab sits along the strip — the offset and the width of
+// one — so a caller can register a click target per tab rather than one for the
+// row. A tab you can see is a tab you expect to be able to hit.
+func (t Tabs) Spans() [][2]int {
+	out := make([][2]int, len(t.Labels))
+	at := 0
+	for i, label := range t.Labels {
+		w := lipgloss.Width(label+t.mark(i)) + 4
+		out[i] = [2]int{at, w}
+		at += w + 1 // the space between one tab and the next
+	}
+	return out
+}
+
 // Wide is how many cells the tabs themselves take, before the rule.
 func (t Tabs) Wide() int {
 	n := max(0, len(t.Labels)-1)
