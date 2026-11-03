@@ -105,6 +105,14 @@ const (
 // the rows themselves, given a moment; which filters are set cannot be worked out
 // from anything on screen.
 func Compute(width, height int, columns bool) Layout {
+	return compute(width, height, columns, 0)
+}
+
+// compute is Compute with the preview asking for a height of its own: rows it
+// is known to need, which a third of the screen capped at previewMax cuts
+// short. The list still keeps its minimum, and the preview gives way to it
+// before it goes altogether.
+func compute(width, height int, columns bool, want int) Layout {
 	l := Layout{Width: max(0, width), Height: max(0, height)}
 	if l.Height <= 0 || l.Width <= 0 {
 		return l
@@ -133,6 +141,9 @@ func Compute(width, height int, columns bool) Layout {
 		}
 
 		preview := clamp(l.Height/3, previewMin, previewMax)
+		if want > 0 {
+			preview = max(previewMin, min(want, rest-fixed-1-minList))
+		}
 		list := rest - fixed - (preview + 1)
 		if list < minList {
 			// No preview: the list is what the screen is for.

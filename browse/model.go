@@ -92,6 +92,10 @@ type Model struct {
 	// which is what an app with no results looks like.
 	Row     RowFunc
 	Preview PreviewFunc
+	// PreviewRows is how tall the preview wants to be, for a preview whose
+	// height is known to need more than the third of the screen it gets by
+	// default. Zero keeps the default.
+	PreviewRows int
 
 	chrome Chrome
 
@@ -236,7 +240,9 @@ func (m Model) Focus() Focus { return m.chrome.Focus }
 
 // Layout is where the bands are, for an app that wants to know how much room its
 // preview has before it goes and fetches anything.
-func (m Model) Layout() Layout { return Compute(m.width, m.height, m.chrome.Columns != "") }
+func (m Model) Layout() Layout {
+	return compute(m.width, m.height, m.chrome.Columns != "", m.PreviewRows)
+}
 
 // Update handles a message and returns the model to keep.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {

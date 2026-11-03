@@ -301,3 +301,31 @@ func TestTheColumnHeaderGoesBeforeTheFilterBar(t *testing.T) {
 		}
 	}
 }
+
+// A preview that asks for more rows gets them, past the default cap, as long as
+// the list keeps enough to browse; on a short screen it gives way to the list.
+func TestAPreviewCanAskForMoreRows(t *testing.T) {
+	if got := Compute(120, 50, true).Preview.Height; got != previewMax {
+		t.Fatalf("the default preview is %d rows, want %d", got, previewMax)
+	}
+	if got := compute(120, 50, true, 20).Preview.Height; got != 20 {
+		t.Errorf("asked for 20 rows, got %d", got)
+	}
+	short := compute(120, 24, true, 20)
+	if short.List.Height < minList {
+		t.Errorf("the list was squeezed to %d rows", short.List.Height)
+	}
+	if short.Preview.Height >= 20 || short.Preview.Height < previewMin {
+		t.Errorf("on a short screen the preview is %d rows", short.Preview.Height)
+	}
+	for _, h := range []int{10, 24, 50} {
+		l := compute(120, h, true, 20)
+		sum := 0
+		for _, r := range []Region{l.Header, l.HeaderRule, l.Search, l.Filters, l.Columns, l.List, l.PreviewRule, l.Preview, l.Footer} {
+			sum += r.Height
+		}
+		if sum != h {
+			t.Errorf("at %d rows the bands add up to %d", h, sum)
+		}
+	}
+}
