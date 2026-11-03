@@ -612,3 +612,20 @@ func TestAQuestionInARestingAppDrawsNoCaret(t *testing.T) {
 		t.Errorf("Window() = %q, want no caret while the keys are elsewhere", got)
 	}
 }
+
+// A tab or a return in a line reaches the terminal as a cursor move nothing
+// here counted: the tab skips cells without clearing them, and the return
+// sends what follows over the start of the line. Neither leaves the screen.
+func TestTabsAndReturnsDoNotReachTheTerminal(t *testing.T) {
+	l := Compute(40, 20, false)
+	c := Chrome{Styles: theme.Default()}
+	out := c.Render(l, []string{"\trow"}, []string{"\t\tif x {\r", "done\r"})
+	if strings.ContainsAny(out, "\t\r") {
+		t.Errorf("the screen carries a tab or a return:\n%q", out)
+	}
+	for _, want := range []string{"    row", "        if x {", "done"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the screen lost %q:\n%s", want, out)
+		}
+	}
+}

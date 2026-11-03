@@ -884,9 +884,17 @@ func (c Chrome) Rule(width int) string {
 // fit truncates a rendered line to width cells, ANSI sequences and wide runes
 // accounted for. It does not pad: nothing here paints a background, so trailing
 // spaces would only be spaces.
+//
+// A tab or a carriage return is counted as no width at all, while the terminal
+// moves the cursor for it: a tab skips cells without clearing them and a
+// return goes back to the start of the line, where the erase that follows wipes
+// it. So tabs become four spaces and returns go, whoever drew the line.
 func fit(line string, width int) string {
 	if width <= 0 {
 		return ""
+	}
+	if strings.ContainsAny(line, "\t\r") {
+		line = strings.NewReplacer("\t", "    ", "\r", "").Replace(line)
 	}
 	if lipgloss.Width(line) <= width {
 		return line
