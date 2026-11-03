@@ -44,8 +44,17 @@ type FiltersChangedMsg struct{}
 //
 // A message rather than an activation: the preview is text the app rendered, and
 // only the app knows whether the fourth line points at a commit. The band knows
-// which line was hit and nothing else.
-type PreviewClickMsg struct{ Line int }
+// which line was hit and where along it, and nothing else.
+//
+// Col is counted from the first cell of the app's own text, the margin the band
+// draws it inset by already taken off, so it indexes the line the app returned:
+// a line can carry more than one thing to open, a link and a ticket side by
+// side, and only the column says which. Negative on the margin itself.
+//
+// Width is the width the preview was laid out at, the one Preview was handed:
+// an app that wraps its text has to wrap it the same way again to know what
+// sits under the column.
+type PreviewClickMsg struct{ Line, Col, Width int }
 
 // AnsweredMsg is Enter on an open prompt: the answer, and the label it answers.
 //
@@ -95,6 +104,11 @@ type Model struct {
 	// PreviewRows is how tall the preview wants to be, for a preview whose
 	// height is known to need more than the third of the screen it gets by
 	// default. Zero keeps the default.
+	//
+	// Set it on the model the app keeps, not in View: View draws from a copy,
+	// and the clicks are placed in Update by the bands this height gives. Set
+	// only in View, the preview is drawn over rows a click still takes for the
+	// list.
 	PreviewRows int
 
 	chrome Chrome
@@ -386,8 +400,8 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		// The preview has no cursor to move, so a click is the only way to act on
 		// a line of it. The focus stays where it was: the click was about that
 		// line, not about which band the keyboard is talking to.
-		line := y - l.Preview.Y
-		return m, func() tea.Msg { return PreviewClickMsg{Line: line} }
+		line, col, width := y-l.Preview.Y, msg.X-margin, previewWidth(l)
+		return m, func() tea.Msg { return PreviewClickMsg{Line: line, Col: col, Width: width} }
 	}
 	return m, nil
 }
@@ -946,11 +960,14 @@ func (m Model) previewLines(l Layout) []string {
 	if m.Preview == nil || l.Preview.Empty() || m.count == 0 {
 		return nil
 	}
-	// The width the preview actually keeps. It is drawn inset a margin either
-	// side, and Render trims it to that, so handing it the whole width does not
-	// buy two more columns — it means the app lays out two it never sees.
-	return m.Preview(m.cursor, l.Width-2*margin, l.Preview.Height)
+	return m.Preview(m.cursor, previewWidth(l), l.Preview.Height)
 }
+
+// previewWidth is the width the preview actually keeps. It is drawn inset a
+// margin either side, and Render trims it to that, so handing it the whole
+// width does not buy two more columns — it means the app lays out two it never
+// sees.
+func previewWidth(l Layout) int { return l.Width - 2*margin }
 
 // A line editor, expressed as functions over the text and where the cursor is in
 // it, so the search field and the answer in a window are edited by the same code

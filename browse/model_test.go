@@ -1081,6 +1081,19 @@ func TestClickingThePreviewReportsTheLine(t *testing.T) {
 		}
 	}
 
+	// And where along the line, counted in the app's own text: the band draws it
+	// inset by the margin, so the first cell of the text is column 0.
+	for _, x := range []int{margin, margin + 7} {
+		_, cmd := m.Update(tea.MouseMsg{X: x, Y: l.Preview.Y, Button: tea.MouseButtonLeft,
+			Action: tea.MouseActionPress})
+		if got := cmd().(PreviewClickMsg); got.Col != x-margin {
+			t.Errorf("a click at x=%d reported column %d, want %d", x, got.Col, x-margin)
+		}
+		if got := cmd().(PreviewClickMsg); got.Width != l.Width-2*margin {
+			t.Errorf("a click reported width %d, want the %d the preview is laid out at", got.Width, l.Width-2*margin)
+		}
+	}
+
 	// The focus is not the point of the click, and must not move with it.
 	before := m.Focus()
 	after, _ := m.Update(tea.MouseMsg{Y: l.Preview.Y, Button: tea.MouseButtonLeft,
