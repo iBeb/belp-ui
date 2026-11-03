@@ -1746,3 +1746,23 @@ func TestAppsCanAskWhichStylesToDrawRowsWith(t *testing.T) {
 		t.Error("the styles did not come back when the keys did")
 	}
 }
+
+// ^L draws the whole screen again: the renderer rewrites only the lines that
+// changed, so whatever another program wrote over a blank one stays there.
+func TestCtrlLRedrawsTheScreen(t *testing.T) {
+	for _, focus := range []string{"search", "list"} {
+		m := New(Chrome{Styles: theme.Default()})
+		m.SetSize(80, 24)
+		m.SetRowCount(3)
+		if focus == "list" {
+			m, _ = press(m, "down")
+		}
+		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+		if cmd == nil {
+			t.Fatalf("^L in the %s did nothing", focus)
+		}
+		if got, want := fmt.Sprintf("%T", cmd()), fmt.Sprintf("%T", tea.ClearScreen()); got != want {
+			t.Errorf("^L in the %s answered %s, want %s", focus, got, want)
+		}
+	}
+}

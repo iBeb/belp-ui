@@ -493,6 +493,13 @@ func (m Model) key(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, func() tea.Msg { return QuitMsg{} }
 
+	// ^L draws the whole screen again, as it does in a shell. bubbletea only
+	// rewrites the lines that changed, so text another program wrote over the
+	// screen stays on every line the app still draws the same, a blank one
+	// most of all, until something makes it draw everything.
+	case "ctrl+l":
+		return m, tea.ClearScreen
+
 	// Backing out of an overlay is exactly what Esc is kept for. It closes the
 	// menu and nothing else: the selection stands, since every toggle already
 	// took effect as it was made.
