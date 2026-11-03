@@ -1,6 +1,6 @@
 // Package spin is the loader every belp app shows while it waits.
 //
-// Four circles filling left to right, then empty again. Not a rotating glyph:
+// Four segments filling left to right, then empty again. Not a rotating glyph:
 // this one says a fixed amount of work is being done in steps, which is what a
 // fetch of a handful of repositories is.
 package spin
@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Dots is how many circles there are, and so how wide the loader is.
+// Dots is how many segments there are, and so how wide the loader is.
 const Dots = 4
 
 // Frames is one full cycle: empty, filling one at a time, then empty again.
@@ -23,8 +23,8 @@ const Frames = Dots + 1
 const Tick = 120 * time.Millisecond
 
 const (
-	full  = "●"
-	empty = "○"
+	full  = "▰"
+	empty = "▱"
 )
 
 // Width is the cells a frame takes, so a caller can pad a column to it.
